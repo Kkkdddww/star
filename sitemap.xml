@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://malttuk.com/</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://malttuk.com/</loc><lastmod>2026-11-12</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>https://malttuk.com/about.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://malttuk.com/guide.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://malttuk.com/guide-promotion.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://malttuk.com/guide-billets.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://malttuk.com/guide-odds.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://malttuk.com/guide-ribbons.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://malttuk.com/guide-start.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://malttuk.com/notice.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://malttuk.com/privacy.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://malttuk.com/terms.html</loc><lastmod>2026-11-12</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>
 </urlset>
