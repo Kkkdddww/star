@@ -99,6 +99,14 @@ const ORDER = 'order=rank_index.desc,honor.desc.nullslast,years.asc,created_at.a
 export const getRun = async (id: string) => (await rest<RunRow[]>(`runs?id=eq.${encodeURIComponent(id)}&select=*`))[0] ?? null;
 export const ranking = (date: string, origin: string | null, limit = 100) =>
   rest<RunRow[]>(`runs?select=${LIST}&mode=eq.free&ended_on=eq.${date}${origin ? `&origin=eq.${encodeURIComponent(origin)}` : ''}&${ORDER}&limit=${limit}`);
+/** v3.2 명예의 전당 시즌: 시즌 2는 FAIR_FROM(잠재력 B안)부터. 한 사람당 최고 기록 하나만 */
+export const SEASON2_FROM = '2026-11-15';
+export async function seasonRanking(season: 1 | 2, origin: string | null, limit = 100): Promise<RunRow[]> {
+  const range = season === 2 ? `ended_on=gte.${SEASON2_FROM}` : `ended_on=lt.${SEASON2_FROM}`;
+  const rows = await rest<RunRow[]>(`runs?select=${LIST}&mode=eq.free&${range}${origin ? `&origin=eq.${encodeURIComponent(origin)}` : ''}&${ORDER}&limit=${limit * 4}`);
+  const seen = new Set<string>();
+  return rows.filter((r) => (seen.has(r.user_id) ? false : (seen.add(r.user_id), true))).slice(0, limit);
+}
 export const recentRuns = (limit = 30) => rest<RunRow[]>(`runs?select=${LIST}&order=created_at.desc&limit=${limit}`);
 export const myRuns = async () => {
   const s = await session();
@@ -125,8 +133,8 @@ export interface ChoiceStat { def_id: string; option_key: string; n: number; ok:
 export const dailyChoiceStats = (day: string) => rest<ChoiceStat[]>(`daily_choice_stats?day=eq.${day}&select=def_id,option_key,n,ok`);
 
 /** 오늘 날짜 (한국 시간) */
-export function today(offsetDays = 0): string {
-  const d = new Date(Date.now() + 9 * 3600 * 1000 - offsetDays * 86400 * 1000);
+export function today(offsetDays = 0, at?: string): string {
+  const d = new Date((at ? Date.parse(at) : Date.now()) + 9 * 3600 * 1000 - offsetDays * 86400 * 1000);
   return d.toISOString().slice(0, 10);
 }
 
@@ -149,6 +157,12 @@ export const cohortRuns = (id: string) => rest<RunRow[]>(`runs?select=${LIST},ch
 
 // ── 방명록 ──
 export interface GuestRow { id: number; user_id: string; nickname: string; body: string; reply: string | null; created_at: string }
+/** v3.2 내 한마디 중 답글이 달린 것 (로비 띠 알림 점) */
+export const myReplied = async (): Promise<number[]> => {
+  const me = myId();
+  if (!me) return [];
+  return (await rest<{ id: number }[]>(`guestbook?select=id&user_id=eq.${me}&reply=not.is.null&order=id.desc&limit=50`)).map((r) => r.id);
+};
 export const guestbook = (limit = 30) => rest<GuestRow[]>(`guestbook?select=id,user_id,nickname,body,reply,created_at&order=created_at.desc&limit=${limit}`);
 export async function writeGuest(nickname: string, body: string): Promise<void> {
   const s = await session();
@@ -177,5 +191,8 @@ export function nicknameProblem(n: string): string | null {
   if (t.length < 2 || t.length > 12) return '2~12자로 정해 주세요';
   if (/\d+\s*(사단|여단|연대|대대|군단|사령부|비행단|함대|중대)/.test(t)) return '실제 부대 이름은 쓸 수 없어요';
   if (BANNED.some((w) => t.replace(/\s/g, '').includes(w))) return '쓸 수 없는 단어가 있어요';
+  if (IMPERSONATE.test(t.replace(/\s/g, ''))) return '운영진으로 보이는 이름은 쓸 수 없어요';
   return null;
 }
+/** v3.2 사칭 막기 (서버 SQL 2026-11-14_v3.2.sql 과 같은 규칙) */
+const IMPERSONATE = /(개발자|운영자|운영진|운영팀|관리자|인사과장|동우캉|admin|(^|[^a-z])gm($|[^a-z]))/i;

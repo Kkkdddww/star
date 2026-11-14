@@ -73,7 +73,8 @@ export interface ReviewOutcome {
 /** 중령 이상 심사는 동기만으로는 인원이 너무 적어서, 다른 기수 대상자를 채워 10명 풀로 심사한다 */
 export const REVIEW_POOL = 10;
 // v3.0: 부대·상관·임기 목표로 전체 평정이 조금 올라서 다른 기수 평균도 +2
-const VIRTUAL_MEAN: Partial<Record<Rank, number>> = { 중령: 72, 대령: 77.5, 준장: 76, 소장: 77.5, 중장: 76 };
+// v3.2: 잠재력 B안(B·C 성장↑)으로 전체 능력치가 올라서 +1 (봇 기준 대령+·준장+ 비율을 v3.1과 같게)
+const VIRTUAL_MEAN: Partial<Record<Rank, number>> = { 중령: 73, 대령: 78.5, 준장: 77, 소장: 78.5, 중장: 77 };
 
 export function runReview(rank: Rank, officers: Officer[], rng: Rng): ReviewOutcome | null {
   if (!PROMOTION[rank]) return null;

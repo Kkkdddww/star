@@ -1,3 +1,4 @@
 node_modules/
 game/dist/
 game/qa/shots/
+game/qa/daily_end.json

@@ -3,7 +3,7 @@ import { CHOICE_BY_ID } from '../data/choices';
 import { RANKS } from '../data/config';
 import { deskText } from '../engine/choice';
 import type { Rank } from '../engine/types';
-import { cohortRuns, getCohort, guestbook, myId, type CohortRow, type GuestRow, type RunRow } from '../net/api';
+import { cohortRuns, getCohort, guestbook, myId, myReplied, type CohortRow, type GuestRow, type RunRow } from '../net/api';
 import { errorBox, header, load, loadingBox, rowHtml } from './social';
 import { insignia } from './insignia';
 
@@ -156,7 +156,20 @@ const gbItem = (g: GuestRow, actions = true) => `<div class="gb">
     ${g.reply ? `<div class="rep"><b>개발자 동우캉</b><p>${esc(g.reply)}</p></div>` : ''}
   </div>`;
 
+const SEEN_KEY = 'malttuk-gb-seen';
+const seenReplies = (): number[] => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]'); } catch { return []; } };
+/** 답글 달린 내 글 중 아직 안 본 것 */
+function unseenReplies(): number[] {
+  if (!myId()) return [];
+  const st = load('gb:mine', myReplied);
+  if (st.state !== 'ok') return [];
+  const seen = seenReplies();
+  return st.data.filter((id) => !seen.includes(id));
+}
+
 export function viewGuestbook(): string {
+  const mine = myId() ? load('gb:mine', myReplied) : null;
+  if (mine?.state === 'ok' && unseenReplies().length) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(mine.data)); } catch { /* 저장 못 해도 화면은 그대로 */ } }
   const st = load('gb:list', () => guestbook(40));
   let list = '';
   if (st.state === 'loading') list = loadingBox;
@@ -179,6 +192,7 @@ export function viewGuestbook(): string {
 export function guestPreview(): string {
   const st = load('gb:pre', () => guestbook(1));
   const g = st.state === 'ok' ? st.data[0] : null;
+  if (unseenReplies().length) return `<a class="gbstrip" href="#/guestbook"><span class="nb">한마디</span><span class="tx"><b>내 한마디에 답글이 달렸어요</b></span><span class="go">보기 ›</span><i class="dot"></i></a>`;
   return `<a class="gbstrip" href="#/guestbook"><span class="nb">한마디</span><span class="tx">${g ? `<b>${esc(g.nickname)}</b> · ${esc(g.body)}` : '개발자한테 버그·건의·응원을 남겨 주세요'}</span><span class="go">쓰기 ›</span></a>`;
 }
 
