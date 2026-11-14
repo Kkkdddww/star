@@ -54,7 +54,7 @@ function useSlot(sl: Slot) {
   persist();
   slot = sl;
   save = read<Save>(SLOT_KEY[sl]);
-  ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null };
+  ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null, sugg: [] };
   ui.report = null; ui.queue = []; ui.tab = 'home';
 }
 const isDaily = (g: GameState | null | undefined) => g?.mode === 'daily';
@@ -132,7 +132,7 @@ const ui = {
   ad: { kind: 'eval' as 'eval' | 'reroll', left: 0 },
   pro: null as Prologue | null,
   newRibbons: [] as string[],
-  upload: { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null as string | null },
+  upload: { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null as string | null, sugg: [] as string[] },
   adBusy: false,
   medals: [] as Earned[],
   tp: null as { key: string; rec: [StatKey, StatKey] } | null,
@@ -1203,6 +1203,14 @@ function endingCard(g: GameState): CardData & { titleId: string | null } {
   };
 }
 
+/** 겹치는 닉네임일 때 추천 3개 (12자 안) */
+function nickSuggestions(base: string): string[] {
+  const b = base.trim().slice(0, 9) || '말뚝';
+  const r = () => String(Math.floor(Math.random() * 90) + 10);
+  const out = new Set<string>([`${b}${r()}`, `${b}_${Math.floor(Math.random() * 9) + 1}`, `${b.slice(0, 7)}${r()}${Math.floor(Math.random() * 10)}`]);
+  return [...out].filter((x) => !nicknameProblem(x)).slice(0, 3);
+}
+
 /** 전역 화면: 이번 판 경험치와 호봉 (서버 기록 기준) */
 function hobongLine(): string {
   const me = myId();
@@ -1229,6 +1237,7 @@ function uploadBox(): string {
     <label class="lbl" for="upnick" style="margin:14px 0 6px">랭킹에 보일 닉네임 · 한 번 정하면 계속 써요</label>
     <input id="upnick" class="inp" style="height:50px;background:var(--bg)" maxlength="12" placeholder="닉네임 (2~12자)" value="${esc(u.nick)}">`}
     ${u.msg ? `<p class="small" style="margin-top:8px;color:var(--red)">${esc(u.msg)}</p>` : ''}
+    ${u.sugg.length && !u.fixed ? `<div class="chips" style="margin-top:8px">${u.sugg.map((x) => `<button class="chip on" data-act="nick-suggest" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -1320,6 +1329,8 @@ async function upload(g: GameState) {
     track('rank_upload', { final_rank: g.ended!.finalRank });
   } catch (e) {
     if (e instanceof AlreadyError) { u.msg = e.message; u.fails = 2; u.busy = false; render(); return; }
+    // 닉네임 겹침은 서버 문제가 아니라서 실패로 세지 않고, 비슷한 이름을 추천해요
+    if (e instanceof Error && /닉네임/.test(e.message)) { u.msg = `${e.message}. 다른 이름을 골라 주세요`; u.sugg = nickSuggestions(nick); u.busy = false; render(); return; }
     u.fails++;
     u.msg = `올리지 못했어요 · ${e instanceof Error ? e.message : '알 수 없는 오류'}`;
   }
@@ -1729,7 +1740,7 @@ root.addEventListener('click', (e) => {
       const game = startGame();
       const focus: [StatKey, StatKey] = p.focus.includes('리더십') ? ['command', 'tactics'] : p.focus.includes('학업') ? ['expertise', 'admin'] : ['command', 'social'];
       save = { game, focus, potentialSeen: p.fixedPot ?? p.range, metaApplied: false, log: [], runId: null };
-      ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null };
+      ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null, sugg: [] };
       persist();
       go('p-commission');
       break;
@@ -1749,7 +1760,7 @@ root.addEventListener('click', (e) => {
     case 'open-reset': ui.sheet = 'reset'; render(); break;
     case 'new-game': if (isFixed(g)) { ui.sheet = null; ui.report = null; useSlot('free'); go('lobby'); break; }
     // falls through
-    case 'confirm-reset': if (isFixed(g)) { ui.sheet = null; render(); break; } ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null }; save = null; persist(); ui.sheet = null; ui.report = null; ui.pro = null; ui.tab = 'home'; invalidate('rank'); go(act === 'new-game' ? 'lobby' : 'p-intro'); break;
+    case 'confirm-reset': if (isFixed(g)) { ui.sheet = null; render(); break; } ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null, sugg: [] }; save = null; persist(); ui.sheet = null; ui.report = null; ui.pro = null; ui.tab = 'home'; invalidate('rank'); go(act === 'new-game' ? 'lobby' : 'p-intro'); break;
     case 'close-sheet': clearInterval(adTimer); ui.sheet = null; ui.tp = null; render(); break;
     case 'equip': meta.equipped = meta.equipped === v ? null : v; persistMeta(); render(); break;
     case 'share': track('share_link'); if (g) void share(g); break;
@@ -1776,6 +1787,11 @@ root.addEventListener('click', (e) => {
     case 'open-person': location.hash = `#/p/${v}`; break;
     // v3.3 로그인
     case 'auth-link': settingsState.authMsg = ''; loginState.msg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = loginState.msg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
+    case 'nick-suggest': {
+      if (ui.route?.name === 'login') { loginState.nick = v; loginState.nickMsg = ''; }
+      else { ui.upload.nick = v; ui.upload.msg = ''; ui.upload.sugg = []; }
+      render(); break;
+    }
     case 'nick-set': {
       const n = (val('lnick') ?? loginState.nick).trim();
       loginState.nick = n;
@@ -1785,7 +1801,7 @@ root.addEventListener('click', (e) => {
       void saveProfile(n, null).then(() => {
         loginState.busy = false; invalidate('profile'); invalidate('person'); forgetPeople();
         toast(`'${n}' 이름으로 시작해요`); location.hash = '';
-      }).catch((e) => { loginState.busy = false; loginState.nickMsg = e instanceof Error ? e.message.replace(/^서버 오류 \d+ · /, '') : '저장하지 못했어요'; render(); });
+      }).catch((e) => { loginState.busy = false; loginState.nickMsg = e instanceof Error ? e.message.replace(/^서버 오류 \d+ · /, '') : '저장하지 못했어요'; loginState.sugg = /닉네임/.test(loginState.nickMsg) ? nickSuggestions(n) : []; render(); });
       break;
     }
     case 'auth-signin': loginState.conflict = null; track('login_signin', { provider: v }); signInProvider(v as Provider); break;
