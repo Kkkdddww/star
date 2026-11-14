@@ -164,3 +164,4 @@
 - 기수 만들기는 로그인(연결) 필요. 꾸미기 해금(5호봉마다)은 아직 없음.
 - 베타 주소: `npm run deploy:beta` → 저장소 맨 위 `beta/index.html` (malttuk.com/beta). noindex, GA · 애드센스 끔, 로비 제목 옆 "베타". 같은 도메인이라 localStorage · 로그인 세션 · Supabase를 지금 사이트와 같이 씀. robots.txt에 `Disallow: /beta/`. v3.3은 베타로 먼저 내고, 확인 뒤 `npm run deploy`로 정식 반영.
 - 정식 반영(2026-11-14): 대항전 첫 회차를 11/16(월)로 앞당김(`CONTEST_FROM`). 베타에서 카카오 · 구글 로그인 왕복 확인 완료(Supabase manual linking 켬). 로그인 화면 `ui/login.ts`(#/login, 카카오 · Google 브랜드 버튼).
+- v3.3.1 서버 부담 줄이기(2026-11-14 밤 Supabase PostgREST · Auth Unhealthy 뒤): 호봉 · 판 수 · 장군 횟수를 `profiles`에 저장(xp, runs_n, generals, fourstars, best_rank, best_free, daily_days, contest_weeks)하고 runs INSERT 트리거 `runs_to_profile`로 더함. `profile_stats` 뷰는 이제 profiles를 그대로 읽음(이름 · 칸 그대로). 오늘의 기수 최고 순위는 함수 `daily_best(uid)`(그 사람이 한 날만 인덱스로 셈). 클라이언트는 `stash()`로 내 호봉 10분 · 오늘 참가 수 2분 · 대항전 모인 수 5분 · 공개 기수/인원 2분 보관. 랭킹 호봉은 profiles.xp를 닉네임과 한 번에 읽음. 팀 점수 규칙도 같은 SQL: 전원 평균 + 10명마다 +5.

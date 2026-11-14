@@ -268,7 +268,8 @@ export const myTeams = async (): Promise<MyTeam[]> => {
   return rest<MyTeam[]>(`members?user_id=eq.${me}&select=cohort_id,user_id,seq,joined_at,cohorts(*)&order=joined_at.asc`);
 };
 export const teamMembers = (cohortId: string) => rest<MemberRow[]>(`members?cohort_id=eq.${cohortId}&select=cohort_id,user_id,seq,joined_at&order=seq.asc`);
-export const memberCounts = async (ids: string[]): Promise<Record<string, number>> => {
+export const memberCounts = (ids: string[]): Promise<Record<string, number>> => stash(`mcount:${[...ids].sort().join(',').slice(0, 300)}`, 2 * 60_000, () => memberCountsRaw(ids));
+const memberCountsRaw = async (ids: string[]): Promise<Record<string, number>> => {
   if (!ids.length) return {};
   const rows = await rest<{ cohort_id: string }[]>(`members?cohort_id=in.(${ids.join(',')})&select=cohort_id`);
   const out: Record<string, number> = {};
@@ -293,7 +294,7 @@ async function contestTotalsRaw(): Promise<{ teams: number; people: number }> {
   const [teams, people] = await Promise.all([cnt('cohorts?select=id&kind=eq.contest&limit=1'), cnt('members?select=user_id&limit=1')]);
   return { teams, people };
 }
-export const publicTeams = () => rest<CohortRow[]>(`cohorts?kind=eq.contest&public=eq.true&select=*&order=created_at.desc&limit=40`);
+export const publicTeams = () => stash('public', 2 * 60_000, () => rest<CohortRow[]>(`cohorts?kind=eq.contest&public=eq.true&select=*&order=created_at.desc&limit=40`));
 /** 그 주 대항전 판 (기수원들) */
 export const weekRuns = (week: string, userIds: string[]) => (userIds.length ? rest<RunRow[]>(`runs?select=${LIST}&mode=eq.contest&week=eq.${week}&user_id=in.(${userIds.join(',')})&${DORDER}&limit=60`) : Promise.resolve([] as RunRow[]));
 /** 닉네임 (프로필) */
@@ -303,12 +304,12 @@ export const nicknames = async (ids: string[]): Promise<Record<string, string>> 
   return Object.fromEntries(rows.map((r) => [r.id, r.nickname]));
 };
 /** 랭킹 닉네임 옆 약장: 대표 기수 */
-export interface TeamTag { id: string; nickname: string; main_cohort?: string | null; cohorts?: { ribbon: number[] | null; no: number | null; name: string } | null }
+export interface TeamTag { id: string; nickname: string; xp?: number; main_cohort?: string | null; cohorts?: { ribbon: number[] | null; no: number | null; name: string } | null }
 /** 랭킹 줄: 지금 닉네임 + 대표 기수. SQL 전이면 닉네임만 */
 export const teamTags = async (ids: string[]): Promise<TeamTag[]> => {
   if (!ids.length) return [];
-  try { return await rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname,main_cohort,cohorts(ribbon,no,name)`); }
-  catch { return rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname`); }
+  try { return await rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname,xp,main_cohort,cohorts(ribbon,no,name)`); }
+  catch { try { return await rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname,main_cohort,cohorts(ribbon,no,name)`); } catch { return rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname`); } }
 };
 /** 랭킹 줄 호봉: 여러 사람의 경험치 */
 export const xpOf = async (ids: string[]): Promise<{ user_id: string; xp: number }[]> => (ids.length ? rest<{ user_id: string; xp: number }[]>(`profile_stats?user_id=in.(${ids.join(',')})&select=user_id,xp`) : []);
@@ -320,7 +321,11 @@ export const profileOf = async (id: string) => (await rest<Profile[]>(`profiles?
 export const statsOf = async (id: string) => (await rest<Stats[]>(`profile_stats?user_id=eq.${id}&select=*`))[0] ?? null;
 /** 로비 · 전역 화면용: 내 호봉은 10분 동안 보관 (업로드하면 지움) */
 export const myStatsCached = (id: string) => stash(`stats:${id}`, 10 * 60_000, () => statsOf(id));
-export const dailyBest = async (id: string) => (await rest<{ day: string; place: number; total: number }[]>(`daily_places?user_id=eq.${id}&select=day,place,total&order=place.asc,day.desc&limit=1`))[0] ?? null;
+/** 오늘의 기수 최고 순위: 가벼운 서버 함수(daily_best). 함수가 없으면(SQL 전) 예전 방식 */
+export async function dailyBest(id: string): Promise<{ day: string; place: number; total: number } | null> {
+  try { return (await rest<{ day: string; place: number; total: number }[]>('rpc/daily_best', { method: 'POST', body: JSON.stringify({ uid: id }) }))[0] ?? null; }
+  catch { return (await rest<{ day: string; place: number; total: number }[]>(`daily_places?user_id=eq.${id}&select=day,place,total&order=place.asc,day.desc&limit=1`))[0] ?? null; }
+}
 export const teamsOf = (id: string) => rest<MyTeam[]>(`members?user_id=eq.${id}&select=cohort_id,user_id,seq,joined_at,cohorts(*)&order=joined_at.asc`);
 export const runsOf = (id: string, limit = 5) => rest<RunRow[]>(`runs?select=${LIST}&user_id=eq.${id}&order=created_at.desc&limit=${limit}`);
 export const ribbonsOf = (id: string) => rest<{ ribbons: { id: string; t: number }[] }[]>(`runs?select=ribbons&user_id=eq.${id}&limit=500`);
