@@ -25,6 +25,7 @@ npm run deploy    # check + build + 맨 위 폴더로 복사
 npm run sim       # 계급 분포 시뮬 (봇 2000판, 몇 분 걸림)
 npm run sim:gen   # 잠재력 S/A 기준 장군 비율. TERM_OFF=1, VM_ADD=2 같은 환경변수로 비교
 npm run sim:pot   # 잠재력 × 선택 실력 비교
+npm run qa        # 휴대폰 크기 브라우저로 주요 화면 열기 + 오류 0개 확인 (build 후)
 ```
 작업이 끝나면 **반드시 `npm run deploy`로 맨 위 파일까지 갱신**해서 같이 커밋한다. 안 하면 사이트에 반영되지 않는다.
 
@@ -48,6 +49,13 @@ npm run sim:pot   # 잠재력 × 선택 실력 비교
 ## 밸런스 목표
 - 실제 사람 기준: 준장 이상 약 8%, 중장 이상 약 1%, 대장 약 0.4%. 봇은 사람보다 2~3배 낮게 나온다.
 - 중령 이상 진급은 다른 기수 평균(promotion.ts의 VIRTUAL_MEAN)과 겨룬다. 전체 능력치가 오르는 변경을 하면 이 값을 시뮬로 다시 맞춘다.
+
+## 프로젝트 스킬 (.claude/skills/)
+- `malttuk-plan`: 새 기능 전 1페이지 명세 → 확인
+- `malttuk-qa`: 커밋 전 자동 QA (check · build · qa · 스크린샷)
+- `malttuk-balance`: 수치 변경 뒤 시뮬로 장군 비율 확인
+- `malttuk-design`: 화면·카드 디자인 규칙
+- `malttuk-writing`: 사건·이야기·엔딩 문구 규칙
 
 ## 작업 방식
 - 사용자는 휴대폰으로 작업하고, 코드를 직접 읽기보다 결과를 본다. 설명은 짧고 쉽게, 한국어로.
