@@ -100,7 +100,7 @@ p{margin:0}
 /* 복무 카드 */
 .svc{display:flex;gap:16px;align-items:center}
 .svc .badge{width:96px;display:flex;justify-content:center;flex-shrink:0}
-.svc .who{flex:1;min-width:0}
+.svc .who{flex:1;min-width:0;display:block;padding:0;font-size:inherit}
 .svc .nm{font-size:22px;font-weight:700;margin:2px 0 3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .rackrow{display:flex;justify-content:center;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);min-height:20px}
 .nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px;border-top:1px solid var(--line);padding-top:12px;text-align:center}
@@ -113,6 +113,35 @@ p{margin:0}
 .row .g b{display:block;font-size:15px}
 .row .g span{font-size:13px;color:var(--sub)}
 .row:not([data-act="noop"]):hover .g b{color:var(--olive)}
+/* v3.4 목록 줄: 둥근 표시 + 제목 한 줄 + 설명 한 줄 (글 줄이기) */
+.bd.list{padding-top:2px;padding-bottom:2px}
+.row.todo{padding:11px 0;min-height:60px}
+.row.todo .mark{width:40px;height:40px;border-radius:50%}
+.row.todo .g b{font-size:15.5px;font-weight:600;color:var(--ink)}
+.row.todo .g span{display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.todo>svg{color:#B4B9AE;flex-shrink:0}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--red);margin-left:6px;vertical-align:3px}
+.kvs{margin:14px 0 4px}
+.note{background:var(--wash);border-radius:14px;padding:13px 15px;margin:12px 0 16px;font-size:13.5px;color:var(--sub);line-height:1.7}
+.note b{color:var(--ink)}
+.fold{margin-top:8px;font-size:13px;color:var(--sub)}
+.fold summary{cursor:pointer;color:var(--sub);text-decoration:underline;text-underline-offset:3px;list-style:none}
+.fold summary::-webkit-details-marker{display:none}
+.fold p{margin:6px 0 0;line-height:1.6}
+.fold .row{color:var(--ink)}
+.row.yr .mark b{font-size:12.5px;color:var(--sub);font-weight:700}
+.row.yr>em{font-style:normal;font-weight:700;font-size:14px;flex-shrink:0}
+.row.yr>em.olive{color:var(--olive)} .row.yr>em.red{color:var(--red)}
+/* 전역 이야기 */
+.page.story{background:#fff;min-height:100vh;min-height:100dvh;padding:14px 24px 0;box-sizing:border-box;position:relative}
+.story .prog{display:flex;gap:5px}
+.story .prog i{flex:1;height:3px;border-radius:2px;background:var(--line)}
+.story .prog i.on{background:var(--olive)}
+.story .skip{position:absolute;top:26px;right:16px;border:0;background:none;color:var(--sub);font-size:13.5px;padding:8px}
+.story .st{position:absolute;left:28px;right:28px;top:34%}
+.story .st .k{font-size:14px;color:var(--sub);margin:0}
+.story .st h1{font-size:28px;line-height:1.38;margin:10px 0 18px;font-weight:800;letter-spacing:-.3px}
+.story .st .s{font-size:15px;font-weight:600;color:var(--ink);margin:0}
 .mark{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--olive-t);color:var(--olive)}
 .mark.amber{background:var(--amber-t);color:var(--amber)}
 .mark.gray{background:var(--wash);color:var(--sub)}

@@ -32,7 +32,7 @@ import { randomRibbon, teamRibbon } from './teamRibbon';
 import { AlreadyError, hideGuest, replyGuest, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
 
 // ───────── 저장 ─────────
-interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number }
+interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number; storyDone?: boolean }
 interface Meta { cleared: boolean; ribbons: Record<string, number[]>; titles: string[]; equipped: string | null; runs: number; bestRank?: number }
 const KEY = 'sowi-to-star-v2';
 const META_KEY = 'sowi-to-star-meta-v2';
@@ -94,7 +94,7 @@ const persistMeta = () => write(META_KEY, meta);
 type Screen = 'medal' | 'lobby' | 'p-intro' | 'p-cands' | 'p-envelope' | 'p-focus' | 'p-school' | 'p-grad' | 'p-commission'
   | 'home' | 'desk' | 'progress' | 'result' | 'promotion' | 'promo-ceremony' | 'wish' | 'order' | 'policy' | 'assign-ceremony' | 'ending';
 type Tab = 'home' | 'record' | 'cohort' | 'dex';
-type Sheet = null | 'focus' | 'retire' | 'reset' | 'ad' | 'title';
+type Sheet = null | 'focus' | 'retire' | 'reset' | 'ad' | 'title' | 'post';
 
 interface Prologue {
   name: string; origin: Origin; potential: Potential; seed: number;
@@ -121,6 +121,7 @@ const ui = {
   sheet: null as Sheet,
   draftFocus: [] as StatKey[],
   report: null as YearReport | null,
+  story: 0,
   queue: [] as Screen[],
   assignFrom: null as string | null,
   firstPost: false,
@@ -310,13 +311,13 @@ function dailyDoc(): string {
   const st = load(`rank:daily:${day}:3`, () => dailyRanking(day, 3));
   const cnt = load(`count:${day}`, () => dailyCount(day));
   const n = cnt.state === 'ok' ? cnt.data : null;
-  const list = st.state === 'ok' ? (st.data.length ? st.data.slice(0, 3).map(lrow).join('') : '<p class="sub" style="padding:8px 0">오늘 전역한 사람이 아직 없어요. 첫 번째가 되어 보세요!</p>') : st.state === 'error' ? '<p class="sub">순위를 불러오지 못했어요</p>' : '<p class="sub">불러오는 중이에요…</p>';
+  const list = st.state === 'ok' ? (st.data.length ? st.data.slice(0, 3).map(lrow).join('') : '<p class="sub" style="padding:8px 0">아직 전역한 사람이 없어요</p>') : st.state === 'error' ? '<p class="sub">순위를 불러오지 못했어요</p>' : '<p class="sub">불러오는 중이에요…</p>';
   const dg = d.save?.game;
   const btn = d.st === 'playing' ? `이어서 하기 · ${dg!.me.rank}` : d.st === 'ended' ? '결과 올리기' : d.st === 'uploaded' ? `오늘 기록 보기 · ${dg!.me.rank}` : '오늘의 기수로 입대하기';
   return `<section class="doc lcard"><div class="hd">
     <div class="dn">일일 명령 · 제${day.slice(0, 4)}-${day.slice(5, 7)}${day.slice(8, 10)}호 · 오늘 24시 마감</div>
     <div class="tt">오늘의 기수<em>${fp ? `난이도 ${DIFFICULTY[fp]}` : '같은 출발선'}</em></div>
-    <p class="ds">하루 한 판 · 모두 같은 후보로 출발 · 평일 보통 · 토 쉬움 · 일 어려움</p>
+    <p class="ds">하루 한 판 · 모두 같은 후보로 출발</p>
   </div><div class="bd">
     <div class="lk"><span>오늘 순위${n !== null ? ` · ${n}명 전역` : ''}</span><a data-act="route-daily">전체 ›</a></div>
     ${list}
@@ -330,7 +331,7 @@ function freeDoc(live: GameState | null): string {
   return `<section class="doc lcard"><div class="hd">
     <div class="dn">자유 훈련 · 기록 무제한</div>
     <div class="tt">자유 플레이<em>시즌 2</em></div>
-    <p class="ds">몇 판이든 · 후보 다시 뽑기 2회 · 약장 모으기</p>
+    <p class="ds">몇 판이든 · 후보 다시 뽑기 2회</p>
   </div><div class="bd">
     <div class="lk"><span>명예의 전당 · 시즌 2</span><a data-act="route-rank">전체 ›</a></div>
     ${list}
@@ -536,24 +537,8 @@ function serviceCard(g: GameState): string {
   </section>`;
 }
 
-function deskBlock(g: GameState): string {
-  if (!g.desk) return '';
-  const r0 = g.desk.results[0];
-  const it0 = g.desk.items[0];
-  const def0 = CHOICE_BY_ID[it0.defId];
-  const t0 = deskText(it0.defId, it0.v);
-  const body = r0
-    ? `<div class="done"><div class="mark ${r0.success ? '' : 'red'}">${icon('pen')}</div><div class="g"><b>${r0.title}</b><span>${r0.label} · ${r0.success ? '성공' : '실패'} · ${esc(r0.outcome.text)}</span></div></div>`
-    : `<button class="pending" data-act="open-desk" data-v="0"><div class="g"><span class="chip">${def0.type}</span><b>${t0.title}</b></div>${icon('chev')}</button>`;
-  return `
-  <section class="doc">
-    <div class="hd"><span>결재함</span><em>${r0 ? '처리 완료' : '대기 1건'}</em></div>
-    <div class="bd">${body}<p class="faint" style="margin-top:10px">${g.desk.items.length > 1 ? '7월에 결재가 한 건 더 올라와요' : ''}</p></div>
-  </section>`;
-}
-
 // ── 터닝포인트: 집중 육성을 바꿀 때를 알려 준다 ──
-interface TurningPoint { key: string; title: string; body: string; rec: [StatKey, StatKey] }
+interface TurningPoint { key: string; title: string; short: string; body: string; rec: [StatKey, StatKey] }
 function turningPoint(g: GameState): TurningPoint | null {
   if (!g.desk || g.history.length === 0) return null;
   const me = g.me;
@@ -568,28 +553,15 @@ function turningPoint(g: GameState): TurningPoint | null {
     return first ? [first, pool[0]] : [pool[0], pool[1]];
   };
   const cands: TurningPoint[] = [];
-  if (me.yearsInRank === 0 && me.rank !== '소위') cands.push({ key: `promo:${me.rank}`, title: `${me.rank} 진급, 군 생활의 터닝포인트`, body: `계급이 오르면 심사 기준도 달라져요. 가장 약한 ${STAT_LABEL[lows[0]]}부터 채우면 역량 균형 점수가 올라요.`, rec: recFor() });
-  if (me.yearsInAssignment === 0 && isRequired(me, a.id)) cands.push({ key: `post:${g.year}:${a.id}`, title: `새 보직 ${a.name}, 집중 육성을 바꿀 때예요`, body: `${STAT_LABEL[a.grows[0]]}·${STAT_LABEL[a.grows[1]]}는 보직에서 저절로 자라요. 집중 육성은 부족한 쪽에 두면 고르게 커요.`, rec: recFor() });
-  if (me.age >= 35 && !focus.includes('fitness')) cands.push({ key: 'age35', title: '체력이 떨어지기 시작하는 나이예요', body: '35세부터는 집중하지 않으면 체력이 해마다 조금씩 줄어요.', rec: recFor('fitness') });
-  if (gap(lows[0]) <= -12) cands.push({ key: `bal:${me.rank}`, title: '역량 균형 경고', body: `${STAT_LABEL[lows[0]]}이(가) ${me.rank} 평균보다 ${-Math.round(gap(lows[0]))} 낮아요. 진급 점수의 15%가 균형에서 나와요.`.replace('이(가)', hasJong(STAT_LABEL[lows[0]]) ? '이' : '가'), rec: recFor(lows[0]) });
+  if (me.yearsInRank === 0 && me.rank !== '소위') cands.push({ key: `promo:${me.rank}`, short: `${me.rank} 진급 · 육성 다시 짤 때`, title: `${me.rank} 진급, 군 생활의 터닝포인트`, body: `계급이 오르면 심사 기준도 달라져요. 가장 약한 ${STAT_LABEL[lows[0]]}부터 채우면 역량 균형 점수가 올라요.`, rec: recFor() });
+  if (me.yearsInAssignment === 0 && isRequired(me, a.id)) cands.push({ key: `post:${g.year}:${a.id}`, short: '새 보직 · 육성 다시 짤 때', title: `새 보직 ${a.name}, 집중 육성을 바꿀 때예요`, body: `${STAT_LABEL[a.grows[0]]}·${STAT_LABEL[a.grows[1]]}는 보직에서 저절로 자라요. 집중 육성은 부족한 쪽에 두면 고르게 커요.`, rec: recFor() });
+  if (me.age >= 35 && !focus.includes('fitness')) cands.push({ key: 'age35', short: '35세 · 체력 관리 시작', title: '체력이 떨어지기 시작하는 나이예요', body: '35세부터는 집중하지 않으면 체력이 해마다 조금씩 줄어요.', rec: recFor('fitness') });
+  if (gap(lows[0]) <= -12) cands.push({ key: `bal:${me.rank}`, short: `역량 균형 경고 · ${STAT_LABEL[lows[0]]}`, title: '역량 균형 경고', body: `${STAT_LABEL[lows[0]]}이(가) ${me.rank} 평균보다 ${-Math.round(gap(lows[0]))} 낮아요. 진급 점수의 15%가 균형에서 나와요.`.replace('이(가)', hasJong(STAT_LABEL[lows[0]]) ? '이' : '가'), rec: recFor(lows[0]) });
   if (save!.tpLast !== undefined && g.year - save!.tpLast < 4) return null;
   const tp = cands.find((c) => !seen.includes(c.key));
   if (!tp) return null;
   if (tp.rec[0] === tp.rec[1] || (focus.includes(tp.rec[0]) && focus.includes(tp.rec[1]))) return null;
   return tp;
-}
-
-function tpCard(g: GameState): string {
-  const tp = turningPoint(g);
-  if (!tp) return '';
-  return `
-  <section class="tp" data-key="${tp.key}">
-    <div class="tp-top"><span class="tp-badge">${icon('target', 14)} 터닝포인트</span></div>
-    <b>${tp.title}</b>
-    <p>${tp.body}</p>
-    <p class="tp-rec">추천 집중 육성 · <b>${STAT_LABEL[tp.rec[0]]}, ${STAT_LABEL[tp.rec[1]]}</b></p>
-    <div class="two"><button class="btn quiet" style="height:48px" data-act="tp-dismiss" data-v="${tp.key}">지금은 괜찮아요</button><button class="btn" style="height:48px" data-act="tp-open" data-v="${tp.key}" data-r="${tp.rec.join(',')}">집중 육성 바꾸기</button></div>
-  </section>`;
 }
 
 function viewHome(g: GameState): string {
@@ -598,48 +570,63 @@ function viewHome(g: GameState): string {
   const a = asg(me.assignmentId);
   const focus = save!.focus;
   const rival = rivalOf(g);
-  const row = (act: string, mk: string, cls: string, title: string, sub: string) =>
-    `<button class="row" data-act="${act}"><div class="mark ${cls}">${icon(mk)}</div><div class="g"><b>${title}</b><span>${sub}</span></div>${act === 'noop' ? '' : icon('chev')}</button>`;
-  const plan: string[] = [];
-  if (up.promotion) plan.push(row('noop', 'up', 'amber', `${up.promotion.to} 진급 심사`, `${up.promotion.attempt}차 · 기회 ${up.promotion.tries}번 중`));
-  if (up.longService) plan.push(row('noop', 'shield', 'amber', '장기복무 선발', up.longService === 2 ? '마지막 기회예요' : '지금까지의 평정 평균이 반영돼요'));
-  if (up.education) plan.push(row('noop', 'book', 'gray', `${up.education} 입교`, '전문성이 석차를 좌우해요'));
-  if (up.reassign) plan.push(row('noop', 'swap', 'gray', '정기 인사', '연말에 희망 조사가 있어요'));
-  if (lacksRequired(me)) plan.push(row('noop', 'alert', 'amber', `필수 보직: ${REQUIRED_BILLET[me.rank]!.label}`, '거치지 않으면 다음 진급 심사를 받을 수 없어요'));
-  const diff = rankCount(rival.rank) - rankCount(me.rank);
-  const rivalState = !rival.active ? '전역했어요' : diff > 0 ? `나보다 ${diff}계급 위` : diff < 0 ? `나보다 ${-diff}계급 아래` : '나와 같은 계급';
+  // v3.4 UI: 한 줄 = 제목 + 설명 한 줄. 해야 할 일에는 빨간 점, 자세한 건 눌러서
+  const row = (act: string, mk: string, cls: string, title: string, sub: string, o: { dot?: boolean; v?: string; r?: string } = {}) =>
+    `<button class="row todo" data-act="${act}"${o.v ? ` data-v="${o.v}"` : ''}${o.r ? ` data-r="${o.r}"` : ''}><div class="mark ${cls}">${icon(mk)}</div><div class="g"><b>${title}${o.dot ? '<i class="dot"></i>' : ''}</b><span>${sub}</span></div>${act === 'noop' ? '' : icon('chev')}</button>`;
+  const todo: string[] = [];
+  if (g.desk) {
+    const r0 = g.desk.results[0];
+    const it0 = g.desk.items[0];
+    const more = g.desk.items.length > 1 ? ' · 7월에 1건 더' : '';
+    todo.push(r0
+      ? row('noop', 'pen', r0.success ? 'gray' : 'red', `결재 처리 · ${r0.success ? '성공' : '실패'}`, `${r0.title}${more}`)
+      : row('open-desk', 'pen', '', '결재 대기 1건', `${CHOICE_BY_ID[it0.defId].type} · ${deskText(it0.defId, it0.v).title}`, { dot: true, v: '0' }));
+  }
+  const tp = turningPoint(g);
+  if (tp) todo.push(row('tp-open', 'target', '', tp.short, `추천 집중 육성 · ${STAT_LABEL[tp.rec[0]]}, ${STAT_LABEL[tp.rec[1]]}`, { dot: true, v: tp.key, r: tp.rec.join(',') }));
+  if (lacksRequired(me)) todo.push(row('noop', 'alert', 'amber', `필수 보직 · ${REQUIRED_BILLET[me.rank]!.label}`, '거쳐야 다음 진급 심사를 받아요'));
+  if (up.promotion) todo.push(row('noop', 'up', 'amber', `${up.promotion.to} 진급 심사`, `올해 말 · ${up.promotion.attempt}차 · 기회 ${up.promotion.tries}번 중`));
+  if (up.longService) todo.push(row('noop', 'shield', 'amber', '장기복무 선발', up.longService === 2 ? '마지막 기회예요' : '지금까지의 평정 평균이 반영돼요'));
+  if (up.education) todo.push(row('noop', 'book', 'gray', `${up.education} 입교`, '전문성이 석차를 좌우해요'));
+  if (up.reassign) todo.push(row('noop', 'swap', 'gray', '정기 인사', '연말에 희망 조사가 있어요'));
+  todo.push(row('open-focus', 'target', 'gray', '집중 육성', `${STAT_LABEL[focus[0]]}, ${STAT_LABEL[focus[1]]}`));
   const risk = me.hidden.risk;
+  if (risk > 0) todo.push(row('noop', 'alert', 'amber', `마음에 걸리는 일 ${risk}건`, risk >= 2 ? '언젠가 감사에서 드러날 수 있어요' : '아직은 괜찮아요'));
+  const diff = rankCount(rival.rank) - rankCount(me.rank);
+  const rivalState = !rival.active ? '전역' : diff > 0 ? `나보다 ${diff}계급 위` : diff < 0 ? `나보다 ${-diff}계급 아래` : '나와 같은 계급';
+  const left = g.desk && !g.desk.results[0] ? 1 : 0;
   const ready = !g.desk || g.desk.results[0];
   return `
   ${serviceCard(g)}
-  ${tpCard(g)}
-  ${deskBlock(g)}
-  ${plan.length ? `<section class="doc"><div class="hd"><span>올해 일정</span></div><div class="bd" style="padding-top:4px;padding-bottom:4px">${plan.join('')}</div></section>` : ''}
   <section class="doc">
-    <div class="hd"><span>라이벌</span><em>${rivalState}</em></div>
-    <div class="bd"><div class="svc">
-      <div class="rk">${insignia(rival.rank, 26, false)}<span>${rival.rank}</span></div>
-      <div class="who"><b>${esc(rival.name)}</b> <span class="faint">${rival.origin}</span><p class="sub small">${rival.active ? asg(rival.assignmentId).name : esc(rival.exitReason ?? '전역')} · ${PERSONALITY[rival.personality].line}</p></div>
-    </div></div>
+    <div class="hd"><span>올해 업무</span><em>${g.year}년${left ? ` · 처리할 일 ${left}건` : ''}</em></div>
+    <div class="bd list">${todo.join('')}</div>
   </section>
   <section class="doc">
-    <div class="hd"><span>현재 보직</span><em>임기 2년 중 ${me.yearsInAssignment + 1}년차</em></div>
-    <div class="bd">
-      <div class="kv"><span>보직</span><b>${a.name} <span class="chip gray">${a.kind}</span></b></div>
+    <div class="hd"><span>지금 자리</span><em>임기 2년 중 ${me.yearsInAssignment + 1}년차</em></div>
+    <div class="bd list">
+      ${row('open-post', 'file', 'gray', `${a.name} · ${a.kind}`, me.term ? `임기 목표 · ${goalOf(me.term).text}${me.term.done === true ? ' (달성)' : me.term.done === false ? ' (미달)' : ''}` : `잘 오르는 능력치 · ${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}`)}
+      ${row('noop', 'people', 'gray', `라이벌 ${esc(rival.name)}`, rival.active ? `${rival.rank} · ${asg(rival.assignmentId).name} · ${rivalState}` : esc(rival.exitReason ?? `${rival.rank} 전역`))}
+    </div>
+  </section>
+  <button class="link" data-act="open-retire">전역 지원서 내기</button>
+  <div class="bar withtabs"><button class="btn" data-act="next-year" ${ready ? '' : 'disabled'}>${ready ? `${g.year}년 보내기` : '결재를 먼저 처리해 주세요'}</button></div>`;
+}
+
+/** 지금 자리 자세히 (시트) */
+function postSheet(g: GameState): string {
+  const me = g.me;
+  const a = asg(me.assignmentId);
+  return `<h3 class="h2">${a.name}</h3><p class="sub">${a.kind} · 임기 2년 중 ${me.yearsInAssignment + 1}년차</p>
+    <div class="kvs">
       <div class="kv"><span>잘 오르는 능력치</span><b>${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}</b></div>
       <div class="kv"><span>경력 가치</span><b>${a.kind === '지휘' || a.kind === '요직' ? '<span class="olive">핵심 경력</span>' : '보조 경력'}</b></div>
       <div class="kv"><span>병과 궁합</span><b>${branchFits(me.branch, a) ? '<span class="olive">잘 맞아요 · 성장 +20%</span>' : '보통'}</b></div>
       ${me.policy ? `<div class="kv"><span>지휘 방침</span><b>${me.policy}</b></div>` : ''}
-      ${me.term ? `<div class="kv"><span>부대 · 상관</span><b>${UNITS[me.term.unit].short} · ${BOSSES[me.term.boss].name}</b></div>
-      <div class="kv"><span>임기 목표</span><b>${goalOf(me.term).text} ${me.term.done === true ? '<span class="chip on">달성</span>' : me.term.done === false ? '<span class="chip gray">미달</span>' : ''}</b></div>` : ''}
+      ${me.term ? `<div class="kv"><span>부대 · 상관</span><b>${UNITS[me.term.unit].short} · ${BOSSES[me.term.boss].name}</b></div>` : ''}
     </div>
-    <div style="border-top:1px solid var(--line);padding:0 14px">
-      ${row('open-focus', 'target', '', '집중 육성', `${STAT_LABEL[focus[0]]}, ${STAT_LABEL[focus[1]]}`)}
-      ${risk > 0 ? row('noop', 'alert', 'amber', `마음에 걸리는 일 ${risk}건`, risk >= 2 ? '언젠가 감사에서 드러날 수 있어요' : '아직은 괜찮아요') : ''}
-    </div>
-  </section>
-  <button class="link" data-act="open-retire">전역 지원서 내기</button>
-  <div class="bar withtabs"><button class="btn" data-act="next-year" ${ready ? '' : 'disabled'}>${ready ? `${g.year}년 보내기` : '결재함을 먼저 처리해 주세요'}</button></div>`;
+    ${me.term ? `<div class="note">임기 목표 · <b>${goalOf(me.term).text}</b><br>이루면 평정 가점과 표창, 진급 공적에도 들어가요</div>` : ''}
+    <button class="btn" data-act="close-sheet">닫기</button>`;
 }
 
 const STAT_DESC: Record<StatKey, string> = {
@@ -651,6 +638,22 @@ const STAT_DESC: Record<StatKey, string> = {
   social: '소통 결재, 인사 배정, 표창',
 };
 
+/** 연도별 기록: 한 해 한 줄 (최근 6년, 나머지는 펼치기) */
+function yearList(g: GameState): string {
+  if (!g.history.length) return '';
+  const line = (h: YearReport) => {
+    const ev = h.events.filter((e) => e.kind !== 'work' && e.kind !== 'choice');
+    const sub = h.promotedTo ? `${h.promotedTo} 진급` : ev.map((e) => e.title).slice(0, 2).join(' · ') || '평범한 한 해';
+    const cls = h.grade === '탁월' || h.grade === '우수' ? 'olive' : h.grade === '미흡' ? 'red' : '';
+    return `<div class="row todo yr"><div class="mark gray"><b>${String(h.year).slice(2)}</b></div><div class="g"><b>${h.rank} · ${h.assignment}</b><span>${esc(sub)}</span></div><em class="${cls}">${h.grade}</em></div>`;
+  };
+  const all = [...g.history].reverse();
+  return `<section class="doc"><div class="hd"><span>연도별 기록</span><em>${g.history.length}년</em></div><div class="bd list">
+    ${all.slice(0, 6).map(line).join('')}
+    ${all.length > 6 ? `<details class="fold"><summary>${all.length - 6}년 더 보기</summary>${all.slice(6).map(line).join('')}</details>` : ''}
+  </div></section>`;
+}
+
 function viewRecord(g: GameState): string {
   const me = g.me;
   const pr = PROMOTION[me.rank];
@@ -660,7 +663,8 @@ function viewRecord(g: GameState): string {
   <section class="doc">
     <div class="hd"><span>능력치</span><em>${me.path} 기준 종합 ${overall(me.stats, me.path)}</em></div>
     <div class="bd">
-      ${STAT_KEYS.map((k) => `<div class="stat"><div class="kv"><span>${STAT_LABEL[k]}</span><b>${me.stats[k]}</b></div><div class="track"><div style="width:${me.stats[k]}%"></div></div><p class="faint" style="margin-top:4px">${STAT_DESC[k]}</p></div>`).join('')}
+      ${STAT_KEYS.map((k) => `<div class="stat"><div class="kv"><span>${STAT_LABEL[k]}</span><b>${me.stats[k]}</b></div><div class="track"><div style="width:${me.stats[k]}%"></div></div></div>`).join('')}
+      <details class="fold"><summary>능력치마다 어디에 쓰이나요</summary>${STAT_KEYS.map((k) => `<p><b>${STAT_LABEL[k]}</b> · ${STAT_DESC[k]}</p>`).join('')}</details>
     </div>
   </section>
   <section class="doc">
@@ -672,13 +676,14 @@ function viewRecord(g: GameState): string {
     <div class="bd">
       ${REQUIRED_BILLET[me.rank] ? `<div class="kv" style="margin-bottom:14px"><span>필수 보직</span><b>${REQUIRED_BILLET[me.rank]!.label} ${lacksRequired(me) ? '<span class="chip red">아직 안 함</span>' : '<span class="chip on">완료</span>'}</b></div>` : ''}
       ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, `55 + 핵심 ${me.rankLog.core ? 25 : 0} + 보조 ${Math.min(2, me.rankLog.support.length) * 10}${me.origin === '육사' ? ' + 출신 3' : ''}`], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
-        .filter((x) => x[1] > 0).map(([l, w, v, d]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(w * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track light"><div style="width:${v}%"></div></div><p class="faint" style="margin-top:4px">${d}</p></div>`).join('')}
+        .filter((x) => x[1] > 0).map(([l, w, v, d]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(w * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track light"><div style="width:${v}%"></div></div><p class="faint" style="margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</p></div>`).join('')}
     </div>
   </section>` : ''}
+  ${yearList(g)}
   ${save!.potentialSeen ? `<section class="doc"><div class="hd"><span>교관 평가서</span><em>임관 당시</em></div><div class="bd"><div class="kv"><span>잠재력${save!.potentialSeen.includes('~') ? ' 범위' : ''}</span><b class="olive">${save!.potentialSeen}${save!.potentialSeen.includes('~') ? '' : '등급'}</b></div></div></section>` : ''}
   <section class="doc">
     <div class="hd"><span>규칙 한눈에</span></div>
-    <div class="bd"><p class="body">1년 성장은 숨은 <b>잠재력</b>과 <b>나이</b>로 정해지고, 절반은 보직 능력치·절반은 집중 육성으로 가요. <b>결재</b> 결과는 나이와 상관없이 바로 더해져요. 진급은 <b>평정·경력·공적(이 계급의 표창·무사고 지휘)·교육·역량 균형</b>을 동기와 비교해 정원만큼 선발해요. 대위는 <b>중대장</b>, 중령은 <b>대대장</b>, 대령은 <b>연대장이나 본부 과장</b>을 거쳐야 심사를 받을 수 있어요. 능력치는 80을 넘거나 잠재력 한계에 가까우면 덜 오르지만 멈추지는 않아요.</p></div>
+    <div class="bd"><details class="fold" style="margin-top:0"><summary>성장 · 진급 규칙 펼치기</summary><p class="body">1년 성장은 숨은 <b>잠재력</b>과 <b>나이</b>로 정해지고, 절반은 보직 능력치·절반은 집중 육성으로 가요. <b>결재</b> 결과는 나이와 상관없이 바로 더해져요. 진급은 <b>평정·경력·공적(최근 4년 표창·무사고 지휘)·교육·역량 균형</b>을 동기와 비교해 정원만큼 선발해요. 대위는 <b>중대장</b>, 중령은 <b>대대장</b>, 대령은 <b>연대장이나 본부 과장</b>을 거쳐야 심사를 받을 수 있어요. 능력치는 80을 넘거나 잠재력 한계에 가까우면 덜 오르지만 멈추지는 않아요.</p></details></div>
   </section>`;
 }
 
@@ -712,11 +717,9 @@ function viewDex(g: GameState | null): string {
     const on = meta.equipped === t.id;
     return `<button class="row" data-act="${has ? 'equip' : 'noop'}" data-v="${t.id}" ${has ? '' : 'disabled'}><div class="mark ${has ? '' : 'gray'}">${icon('star')}</div><div class="g"><b>${has ? t.name : '???'}</b><span>${t.cond}</span></div>${on ? '<span class="chip">장착 중</span>' : has && meta.titles.includes(t.id) ? '<span class="faint">장착</span>' : has ? '<span class="faint">전역 후 장착</span>' : ''}</button>`;
   }).join('');
-  const hist = g && g.history.length ? [...g.history].reverse().map((h) => `<div class="line-item ${h.grade === '탁월' || h.grade === '우수' ? 'good' : h.grade === '미흡' ? 'bad' : ''}"><div class="tick"></div><div class="g"><b>${h.year} · ${h.rank} ${h.assignment}</b><span>${h.events.filter((e) => e.kind !== 'work').map((e) => e.title).slice(0, 3).join(' · ') || '평범한 한 해'}</span></div><em>${h.grade}</em></div>`).join('') : '';
   return `
   <section class="doc"><div class="hd"><span>약장 도감</span><em>${RIBBONS.filter((r) => (meta.ribbons[r.id] ?? []).length || now.some((e) => e.id === r.id)).length} / ${RIBBONS.length}</em></div><div class="bd"><div class="dex">${cells}</div><p class="faint" style="margin-top:10px">약장은 판을 넘어 쌓여요. 이름은 모두 게임 전용이에요.</p></div></section>
-  <section class="doc"><div class="hd"><span>칭호</span><em>복무 카드에 달려요</em></div><div class="bd" style="padding-top:2px;padding-bottom:2px">${titles}</div></section>
-  ${hist ? `<section class="doc"><div class="hd"><span>연도별 기록</span></div><div class="bd" style="padding-top:2px;padding-bottom:2px">${hist}</div></section>` : ''}`;
+  <section class="doc"><div class="hd"><span>칭호</span><em>복무 카드에 달려요</em></div><div class="bd" style="padding-top:2px;padding-bottom:2px">${titles}</div></section>`;
 }
 
 function shell(g: GameState, inner: string): string {
@@ -736,9 +739,13 @@ function sheet(g: GameState | null): string {
   if (ui.sheet === 'focus' && g) {
     const ok = ui.draftFocus.length === 2;
     const rec: StatKey[] = ui.tp?.rec ?? [];
-    body = `<h3 class="h2">집중 육성할 능력치 2개</h3><p class="sub">${ui.tp ? '터닝포인트 추천을 미리 골라 뒀어요. 바꿔도 돼요.' : '올해 기본 성장의 절반이 여기로 가요.'}</p>
+    const tp = ui.tp ? turningPoint(g) : null;
+    body = `<h3 class="h2">${tp ? tp.title : '집중 육성할 능력치 2개'}</h3><p class="sub">${tp ? `${tp.body} 추천을 미리 골라 뒀어요. 바꿔도 돼요.` : '올해 기본 성장의 절반이 여기로 가요.'}</p>
       <div class="pick">${STAT_KEYS.map((k) => `<button class="pk ${ui.draftFocus.includes(k) ? 'on' : ''}" data-act="toggle-focus" data-v="${k}"><b>${STAT_LABEL[k]}${rec.includes(k) ? ' <span class="chip on" style="margin-left:4px">추천</span>' : ''}</b><span>${g.me.stats[k]} · ${g.me.rank} 평균 ${RANK_BASELINE[g.me.rank]}</span></button>`).join('')}</div>
-      <button class="btn" data-act="confirm-focus" ${ok ? '' : 'disabled'}>${ok ? '이걸로 할게요' : `${2 - ui.draftFocus.length}개 더 골라 주세요`}</button>`;
+      <button class="btn" data-act="confirm-focus" ${ok ? '' : 'disabled'}>${ok ? '이걸로 할게요' : `${2 - ui.draftFocus.length}개 더 골라 주세요`}</button>
+      ${ui.tp ? `<button class="link" data-act="tp-dismiss" data-v="${ui.tp.key}">지금 육성 그대로 둘게요</button>` : ''}`;
+  } else if (ui.sheet === 'post' && g) {
+    body = postSheet(g);
   } else if (ui.sheet === 'retire' && g) {
     body = `<h3 class="h2">전역 지원서를 낼까요?</h3><p class="sub">${g.me.rank} 계급으로 군 생활을 마무리해요. 되돌릴 수 없어요.</p>
       <div class="two"><button class="btn quiet" data-act="close-sheet">더 해볼게요</button><button class="btn" data-act="confirm-retire">전역하기</button></div>`;
@@ -1014,8 +1021,8 @@ function viewWish(g: GameState): string {
   <div class="page"><div class="pad tight">
     <p class="kicker">${g.year}년 정기 인사 · ${me.rank}</p>
     <h1 class="h1">보직 희망 조사서</h1>
-    <p class="sub">자리마다 부대 사정이 달라요. 1지망과 2지망을 골라 주세요. 같은 시기 인사 대상인 동기들과 점수 순으로 정원 안에서 배정돼요.</p>
-    <p class="faint" style="margin-top:6px">배정 점수 = 최근 평정 60% + 보직 능력치 30% + 처세 10% + 경험 태그${me.hidden.risk >= 2 ? ' − 마음에 걸리는 일' : ''} · 상관은 발표 날 알 수 있어요</p>
+    <p class="sub">1지망과 2지망을 골라 주세요. 동기들과 배정 점수 순으로 정원 안에서 정해져요.</p>
+    <details class="fold"><summary>배정 점수는 이렇게 매겨요</summary><p>최근 평정 60% + 보직 능력치 30% + 처세 10% + 경험 태그${me.hidden.risk >= 2 ? ' − 마음에 걸리는 일' : ''}. 상관은 발표 날 알 수 있어요.</p></details>
     ${lacksRequired(me) ? `<div class="record" style="margin-top:12px">필수 보직(${REQUIRED_BILLET[me.rank]!.label})을 아직 안 했어요. 안 거치면 ${RANKS[rankCount(me.rank) + 1]} 심사를 받을 수 없어요</div>` : ''}
     <div style="margin-top:10px">
     ${opts.map((a) => {
@@ -1025,12 +1032,12 @@ function viewWish(g: GameState): string {
       const w = info.get(a.id)!;
       const u = w.card ? UNITS[w.card] : null;
       const comp = w.quota === null ? '정원 제한 없음' : w.chance ? `정원 ${w.quota}명 · 1지망 예상 동기 ${w.rivals}명${w.rivals ? ` (나보다 점수 높은 ${w.ahead}명)` : ''}` : '선후배 기수와 경쟁';
+      // v3.4: 카드 한 장 = 이름 줄 + 요약 한 줄 + 경쟁 한 줄. 부대 설명은 고른 자리만
       return `<button class="opt ${l ? 'on' : ''}" data-act="wish" data-v="${a.id}">
         <div class="top2">${l ? `<span class="chip on">${l}</span>` : `<span class="chip gray">${a.kind}</span>`}<b>${a.name}</b>${w.chance ? `<span class="chip ${CHANCE_CLS[w.chance]}">${w.chance}</span>` : `<span class="faint">${quotaLabel(a, w.card)}</span>`}</div>
-        ${u ? `<p class="d"><b style="color:var(--ink)">${u.name}</b> · ${u.desc}</p>` : ''}
-        ${isRequired(me, a.id) ? `<p class="d" style="color:var(--olive);font-weight:600">${lacksRequired(me) ? '필수 보직 · 아직 안 했어요 (지원하면 가점)' : '필수 보직 · 완료'}</p>` : ''}
-        <p class="d">${core ? '<b class="olive">핵심 경력</b>' : '보조 경력'} · ${STAT_LABEL[a.grows[0]]}·${STAT_LABEL[a.grows[1]]} 성장${fit ? ' · 병과 궁합 +20%' : ''}</p>
-        <p class="why">내 배정 점수 ${wishScore(me, a)}${a.wantTags.filter((t) => me.tags.includes(t)).map((t) => ` · #${t}`).join('')}${a.id === me.assignmentId ? ' · 지금 보직' : ''}<br>${comp}</p>
+        <p class="d">${isRequired(me, a.id) && lacksRequired(me) ? '<b class="olive">필수 보직</b> · ' : ''}${core ? '<b class="olive">핵심 경력</b>' : '보조 경력'} · ${STAT_LABEL[a.grows[0]]}·${STAT_LABEL[a.grows[1]]}${fit ? ' · 궁합 +20%' : ''}${u ? ` · ${u.short}` : ''}</p>
+        ${l && u ? `<p class="d">${u.name} · ${u.desc}</p>` : ''}
+        <p class="why">내 점수 ${wishScore(me, a)}${a.id === me.assignmentId ? ' · 지금 보직' : ''} · ${comp}</p>
       </button>`;
     }).join('')}
     </div>
@@ -1044,11 +1051,9 @@ function termRows(g: GameState): string {
   if (!t) return '';
   const u = UNITS[t.unit], b = BOSSES[t.boss], goal = goalOf(t);
   return `<div class="kv"><span>부대 분위기</span><b>${u.name}</b></div>
-      <p class="faint" style="margin:-4px 0 10px;text-align:right">${u.desc}</p>
       <div class="kv"><span>상관</span><b class="olive">${b.name}</b></div>
-      <p class="faint" style="margin:-4px 0 10px;text-align:right">${b.line} · ${b.desc}</p>
       <div class="kv"><span>임기 목표</span><b>${goal.text}</b></div>
-      <p class="faint" style="margin:-4px 0 0;text-align:right">달성하면 평정 +${goal.bonus}, 표창</p>`;
+      <div class="note" style="margin-bottom:0">${b.line} · 목표를 이루면 평정 +${goal.bonus}, 표창</div>`;
 }
 
 // ── 인사명령: 봉투를 열면 발령과 새 상관이 공개된다 ──
@@ -1082,10 +1087,7 @@ function viewOrder(g: GameState): string {
         <div class="kv"><span>발령일</span><b>${g.year}. 1. 1.</b></div>
       </div>
       <p class="body">${p.note}.</p>
-      <div class="chips" style="margin-top:10px">
-        <span class="chip gray">1지망 ${asg(p.wishes[0]).name}</span><span class="chip gray">2지망 ${asg(p.wishes[1]).name}</span>
-        <span class="chip line">${p.quota === null ? '정원 제한 없음' : `정원 ${p.quota}명 · 1지망 지원 ${p.applicants}명`}</span>
-      </div>
+      <p class="faint" style="margin-top:8px">${p.quota === null ? '정원 제한 없음' : `정원 ${p.quota}명 · 1지망 지원 ${p.applicants}명`}</p>
     </div>
     ${b && u ? `<div class="doc rise" style="margin:14px 0 0;animation-delay:.6s"><div class="hd"><span>새 부대 소식</span></div><div class="bd">${termRows(g)}</div></div>` : ''}
   </div>
@@ -1120,11 +1122,10 @@ function viewAssignCeremony(g: GameState): string {
     ${from ? `<div class="move"><div><p class="faint">전출</p><b>${from.name}</b></div>${icon('chev', 22)}<div><p class="faint">전입</p><b class="olive">${a.name}</b></div></div>` : ''}
     <div class="speech"><p class="faint">전입 신고</p><p id="typer" data-text="${esc(speech)}"></p></div>
     <div class="doc" style="margin:14px 0 0"><div class="bd">
-      <div class="kv"><span>보직 유형</span><b>${a.kind} · ${a.kind === '지휘' || a.kind === '요직' ? '핵심 경력' : '보조 경력'}</b></div>
-      <div class="kv"><span>잘 오르는 능력치</span><b>${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}</b></div>
-      <div class="kv"><span>병과 궁합</span><b>${branchFits(me.branch, a) ? '<span class="olive">잘 맞아요 · 성장 +20%</span>' : '보통'}</b></div>
+      <div class="kv"><span>보직</span><b>${a.kind} · ${a.kind === '지휘' || a.kind === '요직' ? '핵심 경력' : '보조 경력'}</b></div>
+      <div class="kv"><span>잘 오르는 능력치</span><b>${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}${branchFits(me.branch, a) ? ' <span class="olive">· +20%</span>' : ''}</b></div>
       ${me.policy ? `<div class="kv"><span>지휘 방침</span><b>${me.policy}</b></div>` : ''}
-      ${termRows(g)}
+      ${ui.firstPost ? termRows(g) : ''}
     </div></div>
     <p class="flavor">${POST_FLAVOR[(g.year + a.name.length) % POST_FLAVOR.length]}</p>
   </div>
@@ -1241,7 +1242,36 @@ function uploadBox(): string {
   </div>`;
 }
 
+/** v3.4 전역 이야기: 한 장에 한 문장씩 (처음 한 번만, 건너뛰기 가능) */
+function storySlides(g: GameState): { k: string; h: string; s: string }[] {
+  const me = g.me;
+  const d = endingCard(g);
+  const best = me.billets.map((id) => asg(id)).sort((a, b) => b.prestige - a.prestige)[0];
+  const promos = g.history.filter((h) => h.promotedTo);
+  const lastPromo = promos[promos.length - 1];
+  const rival = rivalOf(g);
+  const diff = rankCount(me.rank) - rankCount(rival.rank);
+  return [
+    { k: `${d.startYear}–${d.endYear} · ${me.age}세 전역`, h: `${esc(me.name)} ${me.rank}의<br>${d.years}년 군 생활이<br>끝났어요`, s: esc(g.ended!.reason) },
+    { k: '가장 높았던 자리', h: `${best ? best.name : '소대장'}`, s: lastPromo ? `${lastPromo.year}년 ${lastPromo.promotedTo} 진급 · 평정 '탁월' ${d.su}회` : `평정 '탁월' ${d.su}회` },
+    { k: '동기들 사이에서', h: d.pct >= 50 ? `동기 ${d.cohort}명과<br>같이 걸었어요` : `동기 ${d.cohort}명 중<br>상위 ${d.pct}%`, s: d.pct >= 50 ? `${me.rank} 이상 ${d.same}명 · 라이벌 ${esc(rival.name)} ${rival.rank}` : `라이벌 ${esc(rival.name)} · ${rival.rank}${diff > 0 ? ' · 내가 앞섰어요' : diff < 0 ? ' · 한발 늦었어요' : ' · 같은 계급'}` },
+    { k: '가슴에 남은 것', h: `약장 ${d.ribbons.length}개<br>표창 ${d.awards}회`, s: d.clean ? `무사고 지휘 ${d.clean}년` : me.log.incidents ? `중대 사건 ${me.log.incidents}건 중 원칙대로 ${me.log.principled}건` : '큰 사고 없이 마쳤어요' },
+  ];
+}
+function viewStory(g: GameState): string {
+  const sl = storySlides(g);
+  const i = Math.min(ui.story, sl.length - 1);
+  const x = sl[i];
+  return `<div class="page story">
+    <div class="prog">${sl.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</div>
+    <button class="skip" data-act="story-skip">건너뛰기</button>
+    <div class="st rise"><p class="k">${x.k}</p><h1>${x.h}</h1><p class="s">${x.s}</p></div>
+    <div class="bar"><button class="btn" data-act="story-next">${i === sl.length - 1 ? '전역 카드 받기' : '다음'}</button></div>
+  </div>`;
+}
+
 function viewEnding(g: GameState): string {
+  if (!save!.storyDone && !save!.runId) return viewStory(g);
   applyMeta(g);
   const me = g.me;
   const rival = rivalOf(g);
@@ -1754,7 +1784,8 @@ root.addEventListener('click', (e) => {
     case 'toggle-focus': { const k = v as StatKey; ui.draftFocus = ui.draftFocus.includes(k) ? ui.draftFocus.filter((x) => x !== k) : [...ui.draftFocus, k].slice(-2); render(); break; }
     case 'confirm-focus': save!.focus = [ui.draftFocus[0], ui.draftFocus[1]]; if (ui.tp) { (save!.tpSeen ??= []).push(ui.tp.key); save!.tpLast = save!.game.year; ui.tp = null; toast('집중 육성을 바꿨어요'); } persist(); ui.sheet = null; render(); break;
     case 'tp-open': track('turning_point', { action: 'open' }); ui.tp = { key: v, rec: (el.dataset.r ?? '').split(',') as [StatKey, StatKey] }; ui.draftFocus = [...ui.tp.rec]; ui.sheet = 'focus'; render(); break;
-    case 'tp-dismiss': track('turning_point', { action: 'dismiss' }); (save!.tpSeen ??= []).push(v); save!.tpLast = save!.game.year; persist(); render(); break;
+    case 'tp-dismiss': track('turning_point', { action: 'dismiss' }); (save!.tpSeen ??= []).push(v); save!.tpLast = save!.game.year; persist(); ui.sheet = null; ui.tp = null; render(); break;
+    case 'open-post': ui.sheet = 'post'; render(); break;
     case 'open-retire': ui.sheet = 'retire'; render(); break;
     case 'confirm-retire': save!.game = retire(g!); persist(); ui.sheet = null; go('ending'); break;
     case 'open-reset': ui.sheet = 'reset'; render(); break;
@@ -1827,6 +1858,8 @@ root.addEventListener('click', (e) => {
       break;
     }
     case 'share-card': { const url = baseUrl() ? `${baseUrl()}#/card/${v}` : ''; const text = '말뚝 · 이 커리어 어때요? 너는 몇 성까지?'; if (lastCard) void shareCard(lastCard, text, url); else void shareLink(text, url); break; }
+    case 'story-next': if (ui.story >= storySlides(g!).length - 1) { save!.storyDone = true; ui.story = 0; persist(); } else ui.story += 1; render(); window.scrollTo(0, 0); break;
+    case 'story-skip': save!.storyDone = true; ui.story = 0; persist(); render(); window.scrollTo(0, 0); break;
     case 'go-dex': ui.tab = 'dex'; render(); window.scrollTo(0, 0); break;
     case 'back-ending': ui.tab = 'home'; render(); window.scrollTo(0, 0); break;
 
