@@ -58,7 +58,8 @@ export function fixedPotential(day: string): Potential | null {
   const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
   return dow === 6 ? 'S' : dow === 0 ? 'B' : 'A';
 }
-export const POT_DAY_LABEL: Record<Potential, string> = { S: '토요일 · 장군이 많이 나오는 날', A: '평일 기본', B: '일요일 · 어려운 날', C: '' };
+/** 기수 판 난이도 이름: 토 쉬움(S) · 평일 보통(A) · 일 어려움(B) */
+export const DIFFICULTY: Record<Potential, string> = { S: '쉬움', A: '보통', B: '어려움', C: '어려움' };
 
 /** 잠재력 범위: 진짜 등급을 반드시 포함하는 2단계 */
 const ORDER: Potential[] = ['C', 'B', 'A', 'S'];
