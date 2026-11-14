@@ -5,12 +5,14 @@ import { ASSIGNMENTS, ORIGIN, RANKS } from '../data/config';
 import { RIBBONS, type Earned } from '../engine/meta';
 import { ro } from '../engine/text';
 import type { Rank } from '../engine/types';
-import { dailyChoiceStats, dailyCount, dailyPlace, dailyRanking, getProfile, getRun, myId, myRuns, nicknameProblem, ranking, recentRuns, seasonRanking, SEASON2_FROM, saveProfile, today, type RunRow } from '../net/api';
+import { getCohort, dailyChoiceStats, dailyCount, dailyPlace, dailyRanking, getProfile, getRun, myId, myRuns, nicknameProblem, ranking, recentRuns, seasonRanking, SEASON2_FROM, saveProfile, today, type RunRow } from '../net/api';
 import { CHOICE_BY_ID } from '../data/choices';
 import { deskText } from '../engine/choice';
 import { insignia } from './insignia';
 import { prepareCard } from './cardImage';
 import { viewGroup, viewGroupHub, viewGuestbook } from './group';
+import { viewPerson } from './person';
+import { forgetPeople, nameOf, teamTag, viewAward, viewContest, viewTeamForm } from './contest';
 import { ribbonRack } from './ribbon';
 
 export interface CardData {
@@ -62,11 +64,18 @@ export function cardFromRow(r: RunRow): CardData {
 }
 
 // ── 라우팅·데이터 ──
-export type Route = { name: 'card'; id: string } | { name: 'rank' } | { name: 'gallery' } | { name: 'group'; code: string | null } | { name: 'guestbook' } | { name: 'site'; page: SitePage } | null;
+export type Route = { name: 'card'; id: string } | { name: 'rank' } | { name: 'gallery' } | { name: 'group'; code: string | null } | { name: 'guestbook' } | { name: 'site'; page: SitePage }
+  | { name: 'contest' } | { name: 'team-form' } | { name: 'award'; code: string; week: string } | { name: 'person'; id: string } | null;
 export function routeOf(hash: string): Route {
   const m = hash.match(/^#\/card\/([\w-]+)/);
   if (m) return { name: 'card', id: m[1] };
   if (hash.startsWith('#/rank')) return { name: 'rank' };
+  const aw = hash.match(/^#\/award\/([A-Za-z0-9]{6})\/(\d{4}-\d{2}-\d{2})/);
+  if (aw) return { name: 'award', code: aw[1].toUpperCase(), week: aw[2] };
+  if (hash.startsWith('#/contest/new')) return { name: 'team-form' };
+  const pm = hash.match(/^#\/p\/(me|[\w-]{2,40})/);
+  if (pm) return { name: 'person', id: pm[1] };
+  if (hash.startsWith('#/contest')) return { name: 'contest' };
   const c = hash.match(/^#\/c\/([A-Za-z0-9]{6})/);
   if (c) return { name: 'group', code: c[1].toUpperCase() };
   if (hash.startsWith('#/cohort')) return { name: 'group', code: null };
@@ -81,6 +90,8 @@ type Load<T> = { state: 'loading' } | { state: 'ok'; data: T } | { state: 'error
 const cache = new Map<string, Load<unknown>>();
 let rerender: () => void = () => {};
 export function setRerender(f: () => void) { rerender = f; }
+/** 바깥(대항전 약장 등)에서 다시 그리기 요청 */
+export function refresh() { rerender(); }
 export function load<T>(key: string, f: () => Promise<T>): Load<T> {
   const hit = cache.get(key) as Load<T> | undefined;
   if (hit) return hit;
@@ -103,10 +114,10 @@ export function header(title: string, sub = ''): string {
 
 export function rowHtml(r: RunRow, n: number | null): string {
   const me = r.user_id === myId();
-  return `<button class="rrow ${me ? 'me' : ''}" data-act="open-card" data-v="${r.id}">
+  return `<button class="rrow ${me ? 'me' : ''}" data-act="open-person" data-v="${r.user_id}">
     ${n !== null ? `<span class="no">${n}</span>` : ''}
     <span class="ri">${insignia(r.final_rank as Rank, 22, false)}</span>
-    <span class="g"><b>${esc(r.nickname)}${me ? ' <span class="chip on">나</span>' : ''}</b><span>${esc(r.best_billet ?? r.final_rank)} · ${esc(r.origin)} · 평정 탁월 ${r.su_count}회</span></span>
+    <span class="g"><b>${esc(nameOf(r.user_id, r.nickname))}${teamTag(r.user_id)}${me ? ' <span class="chip on">나</span>' : ''}</b><span>${esc(r.best_billet ?? r.final_rank)} · ${esc(r.origin)} · 평정 탁월 ${r.su_count}회</span></span>
     <span class="rv">${r.honor !== null && r.honor !== undefined ? `명예 ${r.honor}` : r.rank_index >= 6 ? `★ ${r.rank_index - 5}` : `약장 ${(r.ribbons ?? []).length}`}</span>
   </button>`;
 }
@@ -116,7 +127,7 @@ function podium(list: RunRow[]): string {
   return `<div class="podium">${top.map((r, i) => {
     if (!r) return '<div class="pd empty"></div>';
     const place = i === 1 ? 1 : i === 0 ? 2 : 3;
-    return `<button class="pd ${place === 1 ? 'first' : ''}" data-act="open-card" data-v="${r.id}"><span class="pn">${place}</span>${insignia(r.final_rank as Rank, place === 1 ? 46 : 38)}<b>${esc(r.nickname)}</b><span>${esc(r.best_billet ?? r.final_rank)} · ${esc(r.origin)}</span>${r.title ? `<i class="chip on">${esc(r.title)}</i>` : ''}</button>`;
+    return `<button class="pd ${place === 1 ? 'first' : ''}" data-act="open-person" data-v="${r.user_id}"><span class="pn">${place}</span>${insignia(r.final_rank as Rank, place === 1 ? 46 : 38)}<b>${esc(nameOf(r.user_id, r.nickname))}${teamTag(r.user_id)}</b><span>${esc(r.best_billet ?? r.final_rank)} · ${esc(r.origin)}</span>${r.title ? `<i class="chip on">${esc(r.title)}</i>` : ''}</button>`;
   }).join('')}</div>`;
 }
 
@@ -224,6 +235,10 @@ export function viewRoute(r: NonNullable<Route>): string {
   if (r.name === 'site') return viewSite(r.page);
   if (r.name === 'group') return r.code ? viewGroup(r.code) : viewGroupHub();
   if (r.name === 'guestbook') return viewGuestbook();
+  if (r.name === 'contest') return viewContest();
+  if (r.name === 'person') return viewPerson(r.id);
+  if (r.name === 'team-form') return viewTeamForm();
+  if (r.name === 'award') { const c = load(`grp:${r.code}`, () => getCohort(r.code)); return viewAward(r.code, r.week, c.state === 'ok' ? c.data : null); }
   return viewRank();
 }
 
@@ -243,8 +258,8 @@ export async function saveNickname(): Promise<void> {
   const n = rk.nick.trim();
   const problem = nicknameProblem(n);
   if (problem) { rk.nickMsg = problem; rerender(); return; }
-  try { await saveProfile(n, null); rk.nickMsg = '저장했어요'; rk.nick = ''; invalidate('profile'); }
-  catch { rk.nickMsg = '저장하지 못했어요. 다시 시도해 주세요'; }
+  try { await saveProfile(n, null); rk.nickMsg = '저장했어요 · 예전 기록도 새 이름으로 보여요'; rk.nick = ''; invalidate('profile'); invalidate('person'); forgetPeople(); }
+  catch (e) { rk.nickMsg = e instanceof Error && /닉네임/.test(e.message) ? e.message : '저장하지 못했어요. 다시 시도해 주세요'; }
   rerender();
 }
 

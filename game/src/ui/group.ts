@@ -6,6 +6,7 @@ import type { Rank } from '../engine/types';
 import { cohortRuns, getCohort, guestbook, myId, myReplied, type CohortRow, type GuestRow, type RunRow } from '../net/api';
 import { errorBox, header, load, loadingBox, rowHtml } from './social';
 import { insignia } from './insignia';
+import { viewTeam } from './contest';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const chev = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
@@ -80,7 +81,7 @@ function fork(mine: Log, theirs: Log): string {
   return '끝까지 같은 선택을 했어요';
 }
 
-function awards(rows: RunRow[]): string {
+export function awards(rows: RunRow[]): string {
   if (rows.length < 2) return '';
   const card = (r: RunRow) => r.choices?.card;
   const best = (f: (r: RunRow) => number | null | undefined, lo = false) => {
@@ -103,6 +104,7 @@ export function viewGroup(code: string): string {
   if (cs.state !== 'ok') return `<div class="page">${header('우리 기수')}<main class="pad tight">${cs.state === 'loading' ? loadingBox : errorBox(cs.msg)}</main></div>`;
   const c = cs.data;
   if (!c) return `<div class="page">${header('우리 기수')}<main class="pad tight">${errorBox('없는 기수 코드예요. 코드를 다시 확인해 주세요')}</main><div class="bar"><button class="btn line" data-act="route-cohort">우리 기수로</button></div></div>`;
+  if (c.kind === 'contest') return viewTeam(c);
   rememberCohort(c.code, c.name);
   const rs = load(`grpruns:${c.id}`, () => cohortRuns(c.id));
   const rows = rs.state === 'ok' ? rs.data : [];

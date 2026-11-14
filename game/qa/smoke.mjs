@@ -33,8 +33,8 @@ const shot = (n) => page.screenshot({ path: `${OUT}/${n}.png`, fullPage: true })
 const step = async (name, fn) => { try { await fn(); await page.waitForTimeout(400); await shot(name); console.log('✓', name); } catch (e) { errors.push(`${name}: ${e.message}`); console.log('✗', name, e.message); } };
 
 await step('01_lobby', async () => { await page.goto(url); await page.waitForTimeout(600); });
-await step('02_daily_candidates', async () => { await page.click('[data-act=daily-go]'); await page.fill('#nm', '테스트'); await page.click('[data-act=p-apply]'); });
-await step('03_free_candidates', async () => { await page.goto(url); await page.click('[data-act=start-new]'); await page.fill('#nm', '테스트'); await page.click('[data-act=p-apply]'); });
+await step('02_daily_candidates', async () => { await page.click('[data-act=lobby-tab][data-v=d]'); await page.click('.lcard [data-act=daily-go]'); await page.fill('#nm', '테스트'); await page.click('[data-act=p-apply]'); });
+await step('03_free_candidates', async () => { await page.goto(url); await page.click('[data-act=lobby-tab][data-v=f]'); await page.click('[data-act=start-new]'); await page.fill('#nm', '테스트'); await page.click('[data-act=p-apply]'); });
 await step('04_cohort_hub', async () => { await page.goto(url + '#/cohort'); });
 await step('05_cohort_page', async () => { await page.goto(url + '#/c/AB12CD'); await page.reload(); await page.waitForTimeout(600); });
 await step('06_guestbook', async () => { await page.goto(url + '#/guestbook'); await page.reload(); });
@@ -52,9 +52,9 @@ await step('09_rank_season', async () => { await page.goto(url + '#/rank'); awai
   await p2.route(/(googlesyndication|googletagmanager|google-analytics|kakao|fonts\.g)/, (r) => r.abort());
   const s2 = async (name, fn) => { try { await fn(); await p2.waitForTimeout(400); await p2.screenshot({ path: `${OUT}/${name}.png`, fullPage: true }); console.log('✓', name); } catch (e) { errors.push(`${name}: ${e.message}`); console.log('✗', name, e.message); } };
   await s2('10_sat_lobby', async () => { await p2.goto(url); await p2.evaluate(() => localStorage.setItem('sowi-to-star-session', JSON.stringify({ access_token: 'x', refresh_token: 'y', expires_at: 4102444800, user_id: 'u1' }))); await p2.reload(); await p2.waitForTimeout(800); });
-  await s2('11_sat_candidates', async () => { await p2.click('[data-act=daily-go]'); await p2.fill('#nm', '테스트'); await p2.click('[data-act=p-apply]'); });
+  await s2('11_sat_candidates', async () => { await p2.click('[data-act=lobby-tab][data-v=d]'); await p2.click('.lcard [data-act=daily-go]'); await p2.fill('#nm', '테스트'); await p2.click('[data-act=p-apply]'); });
   let end = null; try { end = readFileSync('qa/daily_end.json', 'utf8'); } catch { /* 없으면 건너뜀 */ }
-  if (end) await s2('12_daily_end', async () => { await p2.evaluate((v) => localStorage.setItem('malttuk-daily-v1', v), end); await p2.goto(url); await p2.click('[data-act=daily-go]'); await p2.waitForTimeout(600); });
+  if (end) await s2('12_daily_end', async () => { await p2.evaluate((v) => localStorage.setItem('malttuk-daily-v1', v), end); await p2.goto(url); await p2.click('[data-act=lobby-tab][data-v=d]'); await p2.click('.lcard [data-act=daily-go]'); await p2.waitForTimeout(600); });
   await ctx.close();
 }
 

@@ -8,6 +8,8 @@ import { advanceYear, careerYear, decide, newGame, retire, rivalOf, setPolicy, s
 import { branchFits, overall } from '../engine/growth';
 import { earnedRibbons, earnedTitles, honorScore, RIBBONS, TITLES, titleName, type Earned } from '../engine/meta';
 import { initAnalytics, track } from '../net/analytics';
+import { hobongOf, runXp } from '../engine/hobong';
+import { CONTEST_FROM, CONTEST_POT, contestOpen, MAX_TEAMS, weekNo, weekOf } from '../engine/contest';
 import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, type Candidate } from '../engine/candidates';
 import { asg, assignmentsFor, isRequired, lacksRequired, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
@@ -23,8 +25,10 @@ import { medalSvg, metalOf } from './medal';
 import { adSlot, initRewarded, mountAds, rewardedOn, showRewarded } from './ads';
 import { NOTICES, applySettings, footer, hasNewNotice, reduceMotion, setReduceMotion, settingsState } from './site';
 import { guestPreview, gs, cohortCached, cohortOpen, inviteData, rememberCohort } from './group';
-import { cardHtml, dailyCard, dailyResult, invalidate, invalidateDaily, lastCard, rankPreview, rk, routeOf, saveNickname, setRerender, viewRoute, type CardData } from './social';
-import { AlreadyError, createCohort, getProfile, nicknameProblem, reportGuest, saveProfile, saveRun, textProblem, today, writeGuest } from '../net/api';
+import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk, routeOf, rowHtml, saveNickname, setRerender, viewRoute, type CardData } from './social';
+import { forgetPeople, contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
+import { randomRibbon, teamRibbon } from './teamRibbon';
+import { AlreadyError, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
 
 // ───────── 저장 ─────────
 interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number }
@@ -39,8 +43,8 @@ let save: Save | null = read<Save>(KEY);
 if (save && !save.game?.me?.log) save = null; // 이전 버전 저장은 버린다
 const meta: Meta = { cleared: false, ribbons: {}, titles: [], equipped: null, runs: 0, ...(read<Meta>(META_KEY) ?? {}) };
 // 저장 칸 두 개: 자유 플레이 / 오늘의 기수 (서로 덮어쓰지 않는다)
-type Slot = 'free' | 'daily' | 'cohort';
-const SLOT_KEY: Record<Slot, string> = { free: KEY, daily: 'malttuk-daily-v1', cohort: 'malttuk-cohort-v1' };
+type Slot = 'free' | 'daily' | 'cohort' | 'contest';
+const SLOT_KEY: Record<Slot, string> = { free: KEY, daily: 'malttuk-daily-v1', cohort: 'malttuk-cohort-v1', contest: 'malttuk-contest-v1' };
 let slot: Slot = 'free';
 const persist = () => write(SLOT_KEY[slot], save);
 const peek = (sl: Slot): Save | null => (sl === slot ? save : read<Save>(SLOT_KEY[sl]));
@@ -49,11 +53,23 @@ function useSlot(sl: Slot) {
   persist();
   slot = sl;
   save = read<Save>(SLOT_KEY[sl]);
-  ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0 };
+  ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null };
   ui.report = null; ui.queue = []; ui.tab = 'home';
 }
 const isDaily = (g: GameState | null | undefined) => g?.mode === 'daily';
 const isGroup = (g: GameState | null | undefined) => g?.mode === 'cohort';
+const isContest = (g: GameState | null | undefined) => g?.mode === 'contest';
+/** 한 사람 한 판인 모드 (다시 시작 · 다시 뽑기 없음) */
+const isFixed = (g: GameState | null | undefined) => isDaily(g) || isGroup(g) || isContest(g);
+/** 이번 주 대항전 판 상태 */
+function contestState(): { st: 'none' | 'playing' | 'ended' | 'uploaded'; save: Save | null } {
+  const d = peek('contest');
+  const g = d?.game;
+  if (!g) return { st: 'none', save: null };
+  if (!g.ended) return { st: 'playing', save: d };
+  if (g.week !== weekOf(today())) return { st: 'none', save: d };
+  return { st: d.runId ? 'uploaded' : 'ended', save: d };
+}
 /** 우리 기수 진행 상태 */
 function groupState(): { st: 'none' | 'playing' | 'ended' | 'uploaded'; save: Save | null } {
   const d = peek('cohort');
@@ -90,6 +106,8 @@ interface Prologue {
   daily?: string;
   /** 우리 기수 */
   group?: { id: string; code: string; name: string; seed: number; day?: string };
+  /** v3.3 대항전: 그 주 월요일 */
+  week?: string;
   /** v3.2 기수 판: 후보 3명 모두 같은 잠재력 (평일 A · 토 S · 일 B) */
   fixedPot?: Potential | null;
 }
@@ -97,6 +115,7 @@ const REROLL_MAX = 2;
 
 const ui = {
   screen: 'lobby' as Screen,
+  lobbyTab: null as 'd' | 'c' | 'f' | null,
   tab: 'home' as Tab,
   sheet: null as Sheet,
   draftFocus: [] as StatKey[],
@@ -112,7 +131,7 @@ const ui = {
   ad: { kind: 'eval' as 'eval' | 'reroll', left: 0 },
   pro: null as Prologue | null,
   newRibbons: [] as string[],
-  upload: { nick: '', msg: '', busy: false, loaded: false, fails: 0 },
+  upload: { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null as string | null },
   adBusy: false,
   medals: [] as Earned[],
   tp: null as { key: string; rec: [StatKey, StatKey] } | null,
@@ -154,16 +173,16 @@ function currentTitle(): string | null {
 function docNo(g: GameState, suffix: string) { return `제${g.year}-${String(careerYear(g)).padStart(2, '0')}${suffix}호`; }
 
 // ═════════ 학교 프롤로그 ═════════
-function newPrologue(daily?: string, group?: Prologue['group']): Prologue {
-  const r = daily ? keyRng('malttuk-daily', daily) : group ? keyRng('malttuk-cohort', group.seed) : null;
+function newPrologue(daily?: string, group?: Prologue['group'], week?: string): Prologue {
+  const r = daily ? keyRng('malttuk-daily', daily) : group ? keyRng('malttuk-cohort', group.seed) : week ? keyRng('malttuk-contest', week) : null;
   const rand = r ? () => r.next() : Math.random;
   const cands = makeCandidates(rand);
-  const fixedPot = daily ? fixedPotential(daily) : group?.day ? fixedPotential(group.day) : null;
+  const fixedPot = daily ? fixedPotential(daily) : group?.day ? fixedPotential(group.day) : week ? CONTEST_POT : null;
   if (fixedPot) for (const c of cands) c.potential = fixedPot;
   return { name: '', origin: '학군', potential: 'B', seed: 0, focus: [], branch: '전투', open: false, chosen: false, grad: null,
-    cands, pick: null, rerolls: 0, viewed: false, ranges: null, spread: {}, range: null, daily, group, fixedPot };
+    cands, pick: null, rerolls: 0, viewed: false, ranges: null, spread: {}, range: null, daily, group, week, fixedPot };
 }
-const fixedWorld = (p: Prologue) => !!(p.daily || p.group);
+const fixedWorld = (p: Prologue) => !!(p.daily || p.group || p.week);
 
 function viewCands(): string {
   const p = ui.pro!;
@@ -186,9 +205,9 @@ function viewCands(): string {
   <div class="page">
     <header class="top"><button class="iconbtn" style="margin:0 0 0 -8px" data-act="p-back-intro" aria-label="뒤로">${icon('back', 20)}</button></header>
     <div class="pad tight" style="padding-bottom:170px">
-    <p class="kicker">${p.daily ? `오늘의 기수 · ${dayLabel(p.daily)}` : p.group ? `우리 기수 · ${esc(p.group.name)}` : '지원서'} · ${esc(p.name.trim() || '지원자')}</p>
+    <p class="kicker">${p.daily ? `오늘의 기수 · ${dayLabel(p.daily)}` : p.group ? `우리 기수 · ${esc(p.group.name)}` : p.week ? `기수 대항전 · 제${weekNo(p.week)}주` : '지원서'} · ${esc(p.name.trim() || '지원자')}</p>
     <h1 class="h1">어떤 장교로<br>시작할까요?</h1>
-    <p class="sub">${p.daily ? '오늘 입대한 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : p.group ? '이 기수 동기 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : '세 후보는 능력치 총합이 같아요. 출신과 분포만 달라요.'} ${p.fixedPot ? `난이도 ${DIFFICULTY[p.fixedPot]} · 세 후보 모두 잠재력 ${p.fixedPot}예요. 선택으로 겨뤄요.` : '잠재력은 졸업할 때 교관 평가서로 확인할 수 있어요.'}</p>
+    <p class="sub">${p.daily ? '오늘 입대한 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : p.group ? '이 기수 동기 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : p.week ? '이번 주 대항전에 나서는 모두에게 똑같은 세 후보예요. 한 판이 들어간 기수 모두의 점수가 돼요.' : '세 후보는 능력치 총합이 같아요. 출신과 분포만 달라요.'} ${p.fixedPot ? `난이도 ${DIFFICULTY[p.fixedPot]} · 세 후보 모두 잠재력 ${p.fixedPot}예요. 선택으로 겨뤄요.` : '잠재력은 졸업할 때 교관 평가서로 확인할 수 있어요.'}</p>
     ${p.cands.map(card).join('')}
     ${fixedWorld(p) ? '' : `<div class="ctools one">
       <button class="ctool" data-act="p-reroll" ${left > 0 ? '' : 'disabled'}><b>${icon('swap', 16)} 후보 다시 뽑기</b><span class="${left > 0 ? 'free' : ''}">${ui.adBusy ? '광고 불러오는 중…' : left > 0 ? `${rewardedOn() ? '광고 보고' : '무료'} · ${left}회 남음` : '이번 판 다 썼어요'}</span></button>
@@ -225,36 +244,106 @@ function bestLine(i: number): string {
   return `별 ${i - 5}개를 달았어요`;
 }
 
-/** 로비 아래 버튼: 지금 가장 할 만한 것 하나 */
-function lobbyPrimary(): { act: string; label: string } {
-  const d = dailyState(), c = groupState();
+/** 로비 아래 버튼: 진행 중인 판이 있을 때만 "이어서 하기" */
+function lobbyPrimary(): { act: string; label: string } | null {
+  const d = dailyState(), c = groupState(), k = contestState();
   const free = peek('free')?.game;
   if (d.st === 'playing') return { act: 'daily-go', label: `이어서 하기 · 오늘의 기수 · ${d.save!.game.me.rank}` };
+  if (k.st === 'playing') return { act: 'contest-go', label: `이어서 하기 · 대항전 · ${k.save!.game.me.rank}` };
   if (c.st === 'playing') return { act: 'grp-continue', label: `이어서 하기 · ${c.save!.game.group!.name}` };
   if (free && !free.ended) return { act: 'continue', label: `이어서 하기 · ${free.me.rank} ${esc(free.me.name)} · ${free.year}년` };
   if (d.st === 'ended') return { act: 'daily-go', label: '오늘의 기수 결과 올리기' };
+  if (k.st === 'ended') return { act: 'contest-go', label: '대항전 결과 올리기' };
   if (c.st === 'ended') return { act: 'grp-continue', label: '우리 기수 결과 올리기' };
-  if (d.st === 'none') return { act: 'daily-go', label: '오늘의 기수로 입대하기' };
-  return { act: 'start-new', label: '자유 플레이 시작하기' };
+  return null;
 }
 
-function modeRow(act: string, mk: string, title: string, sub: string, tag = '') {
-  return `<button class="mrow" data-act="${act}"><div class="mark">${icon(mk)}</div><div class="g"><b>${title}</b><span>${sub}</span></div>${tag ? `<em>${tag}</em>` : ''}${icon('chev')}</button>`;
+type LobbyTab = 'd' | 'c' | 'f';
+const TAB_KEY = 'malttuk-lobby-tab';
+/** 처음 열 탭: 진행 중인 모드 → 오늘의 기수를 안 했으면 오늘의 기수 → 마지막으로 본 탭 */
+function lobbyTab(): LobbyTab {
+  if (ui.lobbyTab) return ui.lobbyTab;
+  const d = dailyState(), k = contestState();
+  const free = peek('free')?.game;
+  let t: LobbyTab;
+  if (d.st === 'playing' || d.st === 'ended') t = 'd';
+  else if (k.st === 'playing' || k.st === 'ended') t = 'c';
+  else if (free && !free.ended) t = 'f';
+  else if (d.st === 'none') t = 'd';
+  else { let saved: string | null = null; try { saved = localStorage.getItem(TAB_KEY); } catch { /* 무시 */ } t = saved === 'f' || saved === 'd' ? saved : 'c'; }
+  ui.lobbyTab = t;
+  return t;
+}
+
+/** 로비 맨 위: 내 카드 한 줄 (v3.3 인사기록카드 입구) */
+function meCard(best: number): string {
+  // 서버 기록이 있으면 최고 계급은 서버 기준
+  const prof = load('profile', getProfile);
+  const p = prof.state === 'ok' ? prof.data : null;
+  const name = p?.nickname ?? (ui.upload.nick.trim() || '닉네임 없음');
+  const mine = myTeamsNow();
+  const main = mine?.find((t) => t.cohort_id === p?.main_cohort) ?? mine?.[0];
+  const me = myId();
+  const st = me && p ? load(`person:stats:${me}`, () => statsOf(me).catch(() => null)) : null;
+  const hb = st?.state === 'ok' && st.data ? hobongOf(st.data.xp) : null;
+  const runs = st?.state === 'ok' && st.data ? st.data.runs : meta.runs ?? 0;
+  if (st?.state === 'ok' && st.data) best = Math.max(best, st.data.best_rank);
+  return `<a class="pf" href="#/p/me">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${hb ? `<span class="hb">${hb.level}호봉</span>` : ''}${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${runs}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span>${hb ? `<span class="xpbar" style="height:4px;margin-top:6px;display:block"><i style="width:${Math.round((hb.into / hb.need) * 100)}%"></i></span>` : ''}</span><span class="ch">${icon('chev')}</span></a>`;
+}
+
+const lrow = (r: RunRow, i: number) => rowHtml(r, i + 1);
+function dailyDoc(): string {
+  const d = dailyState();
+  const day = today();
+  const fp = fixedPotential(day);
+  const st = load(`rank:daily:${day}:3`, () => dailyRanking(day, 3));
+  const cnt = load(`count:${day}`, () => dailyCount(day));
+  const n = cnt.state === 'ok' ? cnt.data : null;
+  const list = st.state === 'ok' ? (st.data.length ? st.data.slice(0, 3).map(lrow).join('') : '<p class="sub" style="padding:8px 0">오늘 전역한 사람이 아직 없어요. 첫 번째가 되어 보세요!</p>') : st.state === 'error' ? '<p class="sub">순위를 불러오지 못했어요</p>' : '<p class="sub">불러오는 중이에요…</p>';
+  const dg = d.save?.game;
+  const btn = d.st === 'playing' ? `이어서 하기 · ${dg!.me.rank}` : d.st === 'ended' ? '결과 올리기' : d.st === 'uploaded' ? `오늘 기록 보기 · ${dg!.me.rank}` : '오늘의 기수로 입대하기';
+  return `<section class="doc lcard"><div class="hd">
+    <div class="dn">일일 명령 · 제${day.slice(0, 4)}-${day.slice(5, 7)}${day.slice(8, 10)}호 · 오늘 24시 마감</div>
+    <div class="tt">오늘의 기수<em>${fp ? `난이도 ${DIFFICULTY[fp]}` : '같은 출발선'}</em></div>
+    <p class="ds">하루 한 판 · 모두 같은 후보로 출발 · 평일 보통 · 토 쉬움 · 일 어려움</p>
+  </div><div class="bd">
+    <div class="lk"><span>오늘 순위${n !== null ? ` · ${n}명 전역` : ''}</span><a data-act="route-daily">전체 ›</a></div>
+    ${list}
+    <button class="btn ${d.st === 'uploaded' ? 'line' : ''}" data-act="daily-go">${btn}</button>
+    ${d.st === 'uploaded' ? '<p class="faint" style="text-align:center;margin-top:8px">내일 0시에 새 기수가 열려요</p>' : ''}
+  </div></section>`;
+}
+function freeDoc(live: GameState | null): string {
+  const st = load('rank:season2:3', () => seasonRanking(2, null, 3));
+  const list = st.state === 'ok' ? (st.data.length ? st.data.slice(0, 3).map(lrow).join('') : '<p class="sub" style="padding:8px 0">시즌 2 기록이 아직 없어요.</p>') : st.state === 'error' ? '<p class="sub">순위를 불러오지 못했어요</p>' : '<p class="sub">불러오는 중이에요…</p>';
+  return `<section class="doc lcard"><div class="hd">
+    <div class="dn">자유 훈련 · 기록 무제한</div>
+    <div class="tt">자유 플레이<em>시즌 2</em></div>
+    <p class="ds">몇 판이든 · 후보 다시 뽑기 2회 · 약장 모으기</p>
+  </div><div class="bd">
+    <div class="lk"><span>명예의 전당 · 시즌 2</span><a data-act="route-rank">전체 ›</a></div>
+    ${list}
+    <button class="btn line" data-act="${live ? 'continue' : 'start-new'}">${live ? `이어서 하기 · ${live.me.rank} ${esc(live.me.name)}` : '새 인생 시작'}</button>
+    <p class="lmore"><a data-act="route-gallery">커리어 갤러리</a><a data-act="route-mine">나의 기록</a></p>
+  </div></section>`;
 }
 
 function viewLobby(): string {
   const free = peek('free')?.game ?? null;
   const live = free && !free.ended ? free : null;
   const best = Math.max(meta.bestRank ?? -1, live ? rankCount(live.me.rank) : -1);
-  const cur = STEPS.filter(([, i]) => best >= i).length - 1;
-  const track = `<div class="steps"><div class="fillbar" style="width:calc((100% - 28px) * ${Math.max(0, cur) / (STEPS.length - 1)})"></div>${STEPS.map(([l, i], k) => `<div class="st ${best >= i ? 'on' : ''} ${k === cur ? 'cur' : ''}"><i></i><span>${l}</span></div>`).join('')}</div>`;
-  const d = dailyState(), c = groupState();
+  const d = dailyState(), k = contestState();
+  const tab = lobbyTab();
+  const day = today();
+  const fp = fixedPotential(day);
+  const cnt = load(`count:${day}`, () => dailyCount(day));
   const dg = d.save?.game;
-  const dailySub = d.st === 'playing' ? `진행 중 · ${dg!.me.rank} ${esc(dg!.me.name)}` : d.st === 'ended' ? '전역했어요 · 결과를 올려 주세요' : d.st === 'uploaded' ? `${dg!.me.rank} 전역 · 내일 새 기수가 열려요` : (() => { const fp = fixedPotential(today()); return fp ? `모두 같은 출발선 · 난이도 ${DIFFICULTY[fp]}` : '모두 같은 출발선'; })();
-  const cg = c.save?.game;
-  const groupSub = c.st === 'playing' ? `진행 중 · ${esc(cg!.group!.name)}` : c.st === 'ended' ? `${esc(cg!.group!.name)} · 결과를 올려 주세요` : '친구와 같은 출발선 · 7일 동안';
-  const freeSub = live ? `진행 중 · ${live.me.rank} ${esc(live.me.name)} · ${live.year}년` : '연습 · 약장 모으기 · 다시 뽑기 2회';
-  const cnt = dailyCard('count');
+  const dSub = d.st === 'playing' ? `<span class="todo">진행 중</span> · ${dg!.me.rank}` : d.st === 'ended' ? '<span class="todo">결과 올리기</span>' : d.st === 'uploaded' ? `완료 · ${dg!.me.rank}` : `<span class="todo">${fp ? DIFFICULTY[fp] : '오늘'}</span>${cnt.state === 'ok' ? ` · ${cnt.data}명` : ''}`;
+  const kg = k.save?.game;
+  const cSub = k.st === 'playing' ? `<span class="todo">진행 중</span> · ${kg!.me.rank}` : k.st === 'ended' ? '<span class="todo">결과 올리기</span>' : contestTileSub();
+  const fSub = live ? `<span class="todo">진행 중</span> · ${live.me.rank}` : '명예의 전당';
+  const tile = (t: LobbyTab, ic: string, kind: string, name: string, sub: string) => `<button class="tile ${tab === t ? 'on' : ''}" data-act="lobby-tab" data-v="${t}"><span class="ic">${icon(ic, 13)} ${kind}</span><b>${name}</b><span class="s">${sub}</span></button>`;
+  const play = k.st === 'playing' ? { act: 'contest-go', label: `이어서 하기 · ${kg!.me.rank}` } : k.st === 'ended' ? { act: 'contest-go', label: '결과 올리기' } : k.st === 'uploaded' ? { act: 'contest-go', label: '이번 주 기록 보기' } : { act: 'contest-go', label: '이번 주 출전' };
   const primary = lobbyPrimary();
   return `
   <div class="page">
@@ -263,28 +352,20 @@ function viewLobby(): string {
       <button class="iconbtn" data-act="route-rank" aria-label="랭킹">${icon('trophy', 20)}</button>
       <a class="iconbtn" href="#/settings" aria-label="설정">${icon('gear', 20)}</a></header>
     ${guestPreview()}
-    <main class="stack" style="padding-bottom:120px">
-      <section class="doc"><div class="bd hero">
-        <div class="hrow"><div>
-          <p class="sub" style="font-weight:600">2년 말고 30년</p>
-          <p class="big-title">말뚝</p>
-          <p class="sub">진급할 것인가, 전역할 것인가.</p>
-        </div><div class="hbest">${insignia(best < 0 ? '소위' : RANKS[best], 54)}<span>${best < 0 ? '임관 전' : `최고 ${RANKS[best]}`}</span></div></div>
-        ${track}
-      </div></section>
-      <p class="lobsec">플레이</p>
-      <section class="doc modes"><div class="bd">
-        ${modeRow('daily-go', 'calendar', '오늘의 기수', d.st === 'none' ? `${dayLabel(today())} · ${dailySub}` : dailySub, d.st === 'none' && cnt ? cnt : d.st === 'uploaded' ? '완료' : '')}
-        ${modeRow(c.st === 'playing' || c.st === 'ended' ? 'grp-continue' : 'route-cohort', 'people', '우리 기수', groupSub)}
-        ${modeRow(live ? 'continue' : 'start-new', 'swap', '자유 플레이', freeSub)}
-      </div></section>
-      <p class="lobsec">광장</p>
-      <div style="margin:0 12px">${rankPreview()}</div>
+    <main class="stack" style="padding-bottom:${primary ? 120 : 32}px">
+      ${meCard(best)}
+      ${!loginInfo().linked && (meta.runs ?? 0) > 0 ? `<a class="loginrow" href="#/settings"><span class="tx"><b>기록 지키기</b> · 기기를 바꿔도 이어져요</span><span class="go">구글 · 카카오 ›</span></a>` : ''}
+      <div class="tiles">
+        ${tile('d', 'calendar', '매일', '오늘의 기수', dSub)}
+        ${tile('c', 'people', '매주', '대항전', cSub)}
+        ${tile('f', 'swap', '언제나', '자유 플레이', fSub)}
+      </div>
+      ${tab === 'd' ? dailyDoc() : tab === 'c' ? contestDoc(play) : freeDoc(live)}
       ${hasNewNotice() ? `<a class="newnote" href="#/notice"><span class="nb">NEW</span><span><b>패치노트 v${NOTICES[0].id}</b><span>${NOTICES[0].title}</span></span>${icon('chev')}</a>` : ''}
       <div style="margin:12px 12px 0">${adSlot('lobby')}</div>
       <div style="margin:0 12px">${footer()}</div>
     </main>
-    <div class="bar"><button class="btn" data-act="${primary.act}">${primary.label}</button></div>
+    ${primary ? `<div class="bar"><button class="btn" data-act="${primary.act}">${primary.label}</button></div>` : ''}
     ${sheet(free)}
   </div>`;
 }
@@ -394,7 +475,7 @@ function startGame(preview = false): GameState {
   const name = p.name.trim() || '김OO';
   const bonus: Partial<Stats> = { ...g.bonus };
   for (const [k, v] of Object.entries(p.spread)) bonus[k as StatKey] = (bonus[k as StatKey] ?? 0) + v!;
-  return newGame({ name, origin: p.origin, branch: g.branch, path: pathFromFocus(p.focus), potential: p.potential, seed: p.seed, schoolPct: g.pct, bonus, year: preview ? 2027 : undefined, creation: { rerolls: p.rerolls, viewed: p.viewed }, world: fixedWorld(p) ? { mode: p.daily ? 'daily' : 'cohort', day: p.daily, group: p.group ? { id: p.group.id, code: p.group.code, name: p.group.name } : undefined, rollSeed: preview ? 1 : Math.floor(Math.random() * 1e9) } : undefined });
+  return newGame({ name, origin: p.origin, branch: g.branch, path: pathFromFocus(p.focus), potential: p.potential, seed: p.seed, schoolPct: g.pct, bonus, year: preview ? 2027 : undefined, creation: { rerolls: p.rerolls, viewed: p.viewed }, world: fixedWorld(p) ? { mode: p.daily ? 'daily' : p.week ? 'contest' : 'cohort', day: p.daily, week: p.week, group: p.group ? { id: p.group.id, code: p.group.code, name: p.group.name } : undefined, rollSeed: preview ? 1 : Math.floor(Math.random() * 1e9) } : undefined });
 }
 
 function viewCommission(): string {
@@ -428,7 +509,7 @@ function serviceCard(g: GameState): string {
       <div class="svc">
         <div class="badge">${insignia(me.rank, 78)}</div>
         <div class="who">
-          ${isDaily(g) ? `<span class="chip amber">오늘의 기수 · ${dayLabel(g.day!)}</span> ` : isGroup(g) ? `<span class="chip amber">우리 기수 · ${esc(g.group!.name)}</span> ` : ''}${t ? `<span class="chip on">${esc(t)}</span>` : ''}
+          ${isDaily(g) ? `<span class="chip amber">오늘의 기수 · ${dayLabel(g.day!)}</span> ` : isGroup(g) ? `<span class="chip amber">우리 기수 · ${esc(g.group!.name)}</span> ` : isContest(g) ? `<span class="chip amber">대항전 · 제${weekNo(g.week!)}주</span> ` : ''}${t ? `<span class="chip on">${esc(t)}</span>` : ''}
           <p class="nm">${me.rank} ${esc(me.name)}</p>
           <p class="sub">${a.name} <span class="chip gray">${a.kind}</span></p>
           <p class="faint" style="margin-top:4px">${me.age}세 · 종합 능력치 ${overall(me.stats, me.path)}</p>
@@ -650,8 +731,8 @@ function sheet(g: GameState | null): string {
   } else if (ui.sheet === 'retire' && g) {
     body = `<h3 class="h2">전역 지원서를 낼까요?</h3><p class="sub">${g.me.rank} 계급으로 군 생활을 마무리해요. 되돌릴 수 없어요.</p>
       <div class="two"><button class="btn quiet" data-act="close-sheet">더 해볼게요</button><button class="btn" data-act="confirm-retire">전역하기</button></div>`;
-  } else if (ui.sheet === 'reset' && (isDaily(g) || isGroup(g))) {
-    body = `<h3 class="h2">${isDaily(g) ? '오늘의 기수는' : '우리 기수 판은'} 다시 시작할 수 없어요</h3><p class="sub">${isDaily(g) ? '하루 한 번' : '한 사람당 한 번'}, 첫 판만 기록돼요. 그만두려면 복무 화면 아래 '전역 지원서 내기'로 전역해 주세요. 자유 플레이는 로비에서 따로 할 수 있어요.</p>
+  } else if (ui.sheet === 'reset' && isFixed(g)) {
+    body = `<h3 class="h2">${isDaily(g) ? '오늘의 기수는' : isContest(g) ? '대항전 판은' : '우리 기수 판은'} 다시 시작할 수 없어요</h3><p class="sub">${isDaily(g) ? '하루 한 번' : isContest(g) ? '한 주에 한 번' : '한 사람당 한 번'}, 첫 판만 기록돼요. 그만두려면 복무 화면 아래 '전역 지원서 내기'로 전역해 주세요. 자유 플레이는 로비에서 따로 할 수 있어요.</p>
       <button class="btn" data-act="close-sheet">알겠어요</button>`;
   } else if (ui.sheet === 'reset') {
     body = `<h3 class="h2">처음부터 다시 할까요?</h3><p class="sub">진행 중인 군 생활이 지워져요. 약장 도감과 칭호는 남아요.</p>
@@ -1111,14 +1192,31 @@ function endingCard(g: GameState): CardData & { titleId: string | null } {
   };
 }
 
+/** 전역 화면: 이번 판 경험치와 호봉 (서버 기록 기준) */
+function hobongLine(): string {
+  const me = myId();
+  if (!me || !save?.game) return '';
+  const st = load(`person:stats:${me}`, () => statsOf(me).catch(() => null));
+  if (st.state !== 'ok' || !st.data) return '';
+  const g = save.game;
+  const mode = isDaily(g) ? 'daily' : isContest(g) ? 'contest' : isGroup(g) ? 'cohort' : 'free';
+  const gain = mode === 'free' && freeToday() > 5 ? 0 : runXp(rankCount(g.me.rank), mode);
+  const hb = hobongOf(st.data.xp);
+  return `<span class="hbline"><b>+${gain}</b> · ${hb.level}호봉 · 다음 호봉까지 ${hb.need - hb.into}${gain === 0 ? ' · 자유 플레이 경험치는 하루 5판까지' : ''}</span>`;
+}
+const FREE_KEY = 'malttuk-free-xp';
+function freeToday(): number { try { const x = JSON.parse(localStorage.getItem(FREE_KEY) ?? 'null'); return x?.d === today() ? x.n : 0; } catch { return 0; } }
+function bumpFreeToday() { try { localStorage.setItem(FREE_KEY, JSON.stringify({ d: today(), n: freeToday() + 1 })); } catch { /* 무시 */ } }
+
 function uploadBox(): string {
   const u = ui.upload;
-  if (save!.runId) return `<div class="upbox done"><div class="g"><b>랭킹에 올렸어요</b><span>오늘의 랭킹과 갤러리에 내 카드가 보여요</span></div><button class="more" data-act="open-card" data-v="${save!.runId}">내 카드 ${icon('chev')}</button></div>`;
+  if (save!.runId) return `<div class="upbox done"><div class="g"><b>랭킹에 올렸어요</b><span>오늘의 랭킹과 갤러리에 내 카드가 보여요</span>${hobongLine()}</div><button class="more" data-act="open-card" data-v="${save!.runId}">내 카드 ${icon('chev')}</button></div>`;
   return `<div class="upbox">
     <b>마지막 단계 · 랭킹에 올리기</b>
-    <span>닉네임을 정하고 올리면 내 카드 링크가 생기고, 다른 사람과 순위를 겨뤄요</span>
-    <label class="lbl" for="upnick" style="margin:14px 0 6px">랭킹에 보일 닉네임</label>
-    <input id="upnick" class="inp" style="height:50px;background:var(--bg)" maxlength="12" placeholder="닉네임 (2~12자)" value="${esc(u.nick)}">
+    <span>올리면 내 카드 링크가 생기고, 다른 사람과 순위를 겨뤄요</span>
+    ${u.fixed ? `<p class="sub" style="margin-top:12px"><b class="olive">${esc(u.fixed)}</b> 이름으로 올려요 · 닉네임은 인사기록카드에서 바꿀 수 있어요</p>` : `
+    <label class="lbl" for="upnick" style="margin:14px 0 6px">랭킹에 보일 닉네임 · 한 번 정하면 계속 써요</label>
+    <input id="upnick" class="inp" style="height:50px;background:var(--bg)" maxlength="12" placeholder="닉네임 (2~12자)" value="${esc(u.nick)}">`}
     ${u.msg ? `<p class="small" style="margin-top:8px;color:var(--red)">${esc(u.msg)}</p>` : ''}
   </div>`;
 }
@@ -1131,17 +1229,19 @@ function viewEnding(g: GameState): string {
     ui.upload.loaded = true;
     track('game_end', { final_rank: g.ended!.finalRank, years: g.history.length, reason: String(g.ended!.reason ?? '') });
     ui.upload.nick = me.name;
-    getProfile().then((p) => { if (p && !save?.runId) { ui.upload.nick = p.nickname; render(); } }).catch(() => {});
+    getProfile().then((p) => { if (p && !save?.runId) { ui.upload.nick = p.nickname; ui.upload.fixed = nicknameProblem(p.nickname) ? null : p.nickname; if (!ui.upload.fixed) ui.upload.msg = '지금 닉네임은 쓸 수 없는 이름이에요. 새 닉네임을 정해 주세요'; render(); } }).catch(() => {});
   }
   const d = endingCard(g);
   void prepareCard(d, imgLink()).catch(() => {});
   const daily = isDaily(g);
   const group = isGroup(g);
+  const contest = isContest(g);
   const hs = honorScore(g);
   const dailyBox = daily && save!.runId ? dailyResult({ day: g.day!, rank_index: rankCount(g.me.rank), honor: hs!.total, years: g.history.length, log: (save!.log ?? []) as { d?: string; k?: string; ok?: boolean | null }[] }) : '';
   return `
   <div class="page"><div class="pad tight">
-    ${daily ? `<p class="kicker" style="margin:4px 4px 10px">오늘의 기수 · ${dayLabel(g.day!)}</p>` : group ? `<p class="kicker" style="margin:4px 4px 10px">우리 기수 · ${esc(g.group!.name)}</p>` : ''}
+    ${daily ? `<p class="kicker" style="margin:4px 4px 10px">오늘의 기수 · ${dayLabel(g.day!)}</p>` : group ? `<p class="kicker" style="margin:4px 4px 10px">우리 기수 · ${esc(g.group!.name)}</p>` : contest ? `<p class="kicker" style="margin:4px 4px 10px">기수 대항전 · 제${weekNo(g.week!)}주</p>` : ''}
+    ${contest && save!.runId ? contestAfter(g.week!) : ''}
     ${group && save!.runId ? `<a class="newnote" style="margin:0 0 12px" href="#/c/${g.group!.code}"><span class="nb">순위</span><span><b>${esc(g.group!.name)} 순위 보기</b><span>동기들과의 갈림길, 기수 시상</span></span>${icon('chev')}</a>` : ''}
     ${uploadBox()}
     ${dailyBox}
@@ -1157,7 +1257,7 @@ function viewEnding(g: GameState): string {
       <div class="kv"><span>중대 사건</span><b>${me.log.incidents}건 중 원칙대로 ${me.log.principled}건</b></div>
       <div class="kv"><span>라이벌 ${esc(rival.name)}</span><b>${rival.rank}${rival.active ? ' (현역)' : ''}</b></div>
     </div></div>
-    ${group ? `<a class="link" href="#/c/${g.group!.code}">우리 기수 순위 보기</a>` : `<button class="link" data-act="${daily ? 'route-daily' : 'route-rank'}">${daily ? '오늘의 기수 순위 보기' : '명예의 전당 보기'}</button>`}
+    ${group ? `<a class="link" href="#/c/${g.group!.code}">우리 기수 순위 보기</a>` : contest ? '<a class="link" href="#/contest">대항전 순위 보기</a>' : `<button class="link" data-act="${daily ? 'route-daily' : 'route-rank'}">${daily ? '오늘의 기수 순위 보기' : '명예의 전당 보기'}</button>`}
   </div>
   ${save!.runId
     ? `<div class="bar"><div class="two"><button class="btn line" data-act="go-dex">약장 도감</button><button class="btn" data-act="new-game">${daily || group ? '로비로' : '새 인생 시작'}</button></div></div>`
@@ -1176,8 +1276,8 @@ function dailyNext(): string {
 
 async function upload(g: GameState) {
   const u = ui.upload;
-  const nick = u.nick.trim();
-  const problem = nicknameProblem(nick);
+  const nick = (u.fixed ?? u.nick).trim();
+  const problem = u.fixed ? null : nicknameProblem(nick);
   if (problem) { u.msg = problem; render(); return; }
   u.busy = true; u.msg = ''; render();
   try {
@@ -1185,6 +1285,7 @@ async function upload(g: GameState) {
     const best = g.me.billets.map((id) => asg(id)).sort((a, b) => b.prestige - a.prestige)[0];
     const rival = rivalOf(g);
     await saveProfile(nick, d.title);
+    { const mt = myTeamsNow(); if (mt?.length) await ensureMainTeam(mt[0].cohort_id); }
     const id = await saveRun({
       nickname: nick, origin: g.me.origin, branch: g.me.branch, final_rank: d.finalRank, rank_index: rankCount(d.finalRank),
       best_billet: best?.name ?? null, best_prestige: best?.prestige ?? null, years: d.years, su_count: d.su,
@@ -1194,10 +1295,14 @@ async function upload(g: GameState) {
       honor: honorScore(g).total,
       ...(isDaily(g) ? { mode: 'daily' as const, day: g.day! } : {}),
       ...(isGroup(g) ? { mode: 'cohort' as const, cohort_id: g.group!.id } : {}),
+      ...(isContest(g) ? { mode: 'contest' as const, week: g.week! } : {}),
     });
+    if (isContest(g)) invalidate('contest');
     if (isDaily(g)) invalidateDaily();
     if (isGroup(g)) invalidate('grpruns');
     save!.runId = id; persist();
+    if (!isFixed(g)) bumpFreeToday();
+    ui.upload.fixed = nick; invalidate('person');
     invalidate('rank'); invalidate('gallery'); invalidate('mine'); invalidate('profile');
     toast('랭킹에 올렸어요');
     track('rank_upload', { final_rank: g.ended!.finalRank });
@@ -1217,6 +1322,15 @@ function toast(msg: string) {
 }
 
 const baseUrl = () => (location.href.startsWith('http') ? location.href.split('#')[0] : '');
+/** 대표 기수가 없으면 이 기수를 대표로 (프로필이 있을 때만) */
+async function ensureMainTeam(cohortId: string) {
+  try {
+    const prof = await getProfile();
+    if (prof && !prof.main_cohort) await setMainTeam(cohortId);
+  } catch { /* 프로필이 없으면 첫 업로드 뒤에 정해요 */ }
+  invalidate('profile');
+}
+
 async function shareLink(text: string, url: string) {
   try {
     if (navigator.share) { await navigator.share({ title: '말뚝', text, url: url || undefined }); return; }
@@ -1371,12 +1485,14 @@ root.addEventListener('input', (e) => {
   if (t.id === 'gcode') gs.code = t.value.toUpperCase();
   if (t.id === 'gbnick') gs.gbNick = t.value;
   if (t.id === 'gbtext') gs.gbText = t.value;
+  if (t.id === 'tname') cs.name = t.value;
+  if (t.id === 'tmotto') cs.motto = t.value;
 });
 root.addEventListener('change', (e) => {
   const t = e.target as HTMLSelectElement;
   if (t.id === 'rday') { rk.day = Number(t.value); render(); }
 });
-window.addEventListener('hashchange', () => { settingsState.confirmWipe = false; settingsState.msg = ''; ui.route = routeOf(location.hash); prefillGuest(); render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { settingsState.confirmWipe = false; settingsState.msg = ''; settingsState.confirmDelete = false; settingsState.confirmLogout = false; settingsState.authMsg = ''; ui.route = routeOf(location.hash); prefillGuest(); render(); window.scrollTo(0, 0); });
 function prefillGuest() {
   if (ui.route?.name !== 'guestbook' || gs.gbNick) return;
   getProfile().then((p) => { if (p && !gs.gbNick) { gs.gbNick = p.nickname; render(); } }).catch(() => {});
@@ -1401,6 +1517,7 @@ root.addEventListener('click', (e) => {
   if (upEl) ui.upload.nick = upEl.value;
   const val = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value;
   gs.name = val('gname') ?? gs.name; gs.code = (val('gcode') ?? gs.code).toUpperCase(); gs.gbNick = val('gbnick') ?? gs.gbNick; gs.gbText = val('gbtext') ?? gs.gbText;
+  cs.name = val('tname') ?? cs.name; cs.motto = val('tmotto') ?? cs.motto;
   const g = save?.game ?? null;
   const p = ui.pro;
   switch (act) {
@@ -1440,6 +1557,82 @@ root.addEventListener('click', (e) => {
       break;
     }
     case 'route-cohort': location.hash = '#/cohort'; break;
+    // v3.3 기수 대항전
+    case 'lobby-tab': ui.lobbyTab = v as 'd' | 'c' | 'f'; try { localStorage.setItem('malttuk-lobby-tab', v); } catch { /* 무시 */ } render(); break;
+    case 'route-contest': location.hash = '#/contest'; break;
+    case 'contest-go': {
+      const k = contestState();
+      if (k.st !== 'none') { useSlot('contest'); leaveRoute(); ui.tab = 'home'; go(save!.game.ended ? 'ending' : 'home'); break; }
+      if (!contestOpen(today())) { toast(`${Number(CONTEST_FROM.slice(5, 7))}월 ${Number(CONTEST_FROM.slice(8, 10))}일(월)부터 출전할 수 있어요`); break; }
+      const teams = myTeamsNow();
+      if (teams === null) { toast('기수 정보를 불러오는 중이에요'); break; }
+      if (!teams.length) { toast('먼저 대항전 기수에 들어가 주세요'); location.hash = '#/contest'; break; }
+      useSlot('contest'); leaveRoute();
+      save = null; ui.pro = newPrologue(undefined, undefined, weekOf(today()));
+      track('contest_start', { teams: teams.length }); go('p-intro'); break;
+    }
+    case 'team-new': {
+      if ((myTeamsNow()?.length ?? 0) >= MAX_TEAMS) { toast(`기수는 ${MAX_TEAMS}곳까지 들어갈 수 있어요`); break; }
+      if (!loginInfo().linked) { toast('기수 만들기는 로그인이 필요해요 · 기수장 자리를 지켜 줘요'); location.hash = '#/settings'; break; }
+      Object.assign(cs, { name: '', motto: '', ribbon: randomRibbon(), pub: true, msg: '', busy: false, edit: null });
+      location.hash = '#/contest/new'; break;
+    }
+    case 'team-edit': {
+      void getCohort(v).then((c) => { if (!c) return; Object.assign(cs, { name: c.name, motto: c.motto ?? '', ribbon: c.ribbon ?? [3, 0, 0], pub: !!c.public, msg: '', busy: false, edit: c.id }); location.hash = '#/contest/new'; });
+      break;
+    }
+    case 'rib-b': cs.ribbon = [Number(v), cs.ribbon[1], cs.ribbon[2]]; render(); break;
+    case 'rib-p': cs.ribbon = [cs.ribbon[0], Number(v), cs.ribbon[2]]; render(); break;
+    case 'rib-c': cs.ribbon = [cs.ribbon[0], cs.ribbon[1], Number(v)]; render(); break;
+    case 'rib-rand': cs.ribbon = randomRibbon(); render(); break;
+    case 'team-pub': cs.pub = !cs.pub; render(); break;
+    case 'team-save': {
+      const name = cs.name.trim(), motto = cs.motto.trim();
+      const bad = name.length < 2 ? '기수 이름을 2자 이상 써 주세요' : name.length > 16 ? '16자까지 쓸 수 있어요' : textProblem(name) ?? (motto ? textProblem(motto.length < 2 ? `${motto}  ` : motto) : null);
+      if (bad) { cs.msg = bad; render(); break; }
+      cs.busy = true; cs.msg = ''; render();
+      const input = { name, motto, ribbon: cs.ribbon, public: cs.pub };
+      const job = cs.edit ? updateTeam(cs.edit, input).then(() => null) : createTeam(input);
+      void job.then(async (c) => {
+        cs.busy = false;
+        invalidate('contest'); invalidate('grp');
+        if (c) { await ensureMainTeam(c.id); track('team_create'); location.hash = `#/c/${c.code}`; }
+        else { toast('고쳤어요'); history.back(); }
+      }).catch((e) => { cs.busy = false; cs.msg = e instanceof Error ? e.message : '저장하지 못했어요'; render(); });
+      break;
+    }
+    case 'team-join': {
+      void joinTeam(v).then(async () => { invalidate('contest'); await ensureMainTeam(v); toast('기수에 들어갔어요'); track('team_join'); render(); })
+        .catch((e) => toast(e instanceof Error ? e.message : '들어가지 못했어요'));
+      break;
+    }
+    case 'team-random': {
+      const mine = myTeamsNow() ?? [];
+      if (mine.length >= MAX_TEAMS) { toast(`기수는 ${MAX_TEAMS}곳까지 들어갈 수 있어요`); break; }
+      const have = new Set(mine.map((t) => t.cohort_id));
+      void publicTeams().then(async (ts) => {
+        const cand = ts.filter((t) => !have.has(t.id));
+        const cnt = await memberCounts(cand.map((t) => t.id));
+        const open = cand.filter((t) => (cnt[t.id] ?? 0) < t.max_members).sort((a, b) => (cnt[a.id] ?? 0) - (cnt[b.id] ?? 0));
+        if (!open.length) { toast('자리가 있는 공개 기수가 없어요. 직접 만들어 보세요'); return; }
+        const pick = open[Math.floor(Math.random() * Math.min(3, open.length))];
+        await joinTeam(pick.id); invalidate('contest'); await ensureMainTeam(pick.id);
+        track('team_random'); toast(`'${pick.name}' 기수에 들어갔어요`); location.hash = `#/c/${pick.code}`;
+      }).catch((e) => toast(e instanceof Error ? e.message : '들어가지 못했어요'));
+      break;
+    }
+    case 'team-leave': {
+      if (!confirm('이 기수에서 나갈까요? 이번 주 기록은 기수 점수에서 빠져요.')) break;
+      void leaveTeam(v).then(async () => {
+        invalidate('contest');
+        const prof = await getProfile().catch(() => null);
+        if (prof?.main_cohort === v) await setMainTeam(null).catch(() => {});
+        invalidate('profile'); toast('기수에서 나왔어요'); location.hash = '#/contest';
+      }).catch((e) => toast(e instanceof Error ? e.message : '나가지 못했어요'));
+      break;
+    }
+    case 'team-main': void setMainTeam(v).then(() => { invalidate('profile'); toast('대표 기수로 정했어요 · 랭킹에 이 약장이 보여요'); render(); }).catch(() => toast('먼저 랭킹에 한 번 올려야 정할 수 있어요')); break;
+    case 'copy-award': navigator.clipboard?.writeText(location.href).then(() => toast('링크를 복사했어요')).catch(() => toast(location.href)); break;
     case 'grp-continue': {
       useSlot('cohort'); leaveRoute();
       if (!save?.game) { go('lobby'); break; }
@@ -1510,7 +1703,7 @@ root.addEventListener('click', (e) => {
       const game = startGame();
       const focus: [StatKey, StatKey] = p.focus.includes('리더십') ? ['command', 'tactics'] : p.focus.includes('학업') ? ['expertise', 'admin'] : ['command', 'social'];
       save = { game, focus, potentialSeen: p.fixedPot ?? p.range, metaApplied: false, log: [], runId: null };
-      ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0 };
+      ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null };
       persist();
       go('p-commission');
       break;
@@ -1528,9 +1721,9 @@ root.addEventListener('click', (e) => {
     case 'open-retire': ui.sheet = 'retire'; render(); break;
     case 'confirm-retire': save!.game = retire(g!); persist(); ui.sheet = null; go('ending'); break;
     case 'open-reset': ui.sheet = 'reset'; render(); break;
-    case 'new-game': if (isDaily(g) || isGroup(g)) { ui.sheet = null; ui.report = null; useSlot('free'); go('lobby'); break; }
+    case 'new-game': if (isFixed(g)) { ui.sheet = null; ui.report = null; useSlot('free'); go('lobby'); break; }
     // falls through
-    case 'confirm-reset': if (isDaily(g) || isGroup(g)) { ui.sheet = null; render(); break; } ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0 }; save = null; persist(); ui.sheet = null; ui.report = null; ui.pro = null; ui.tab = 'home'; invalidate('rank'); go(act === 'new-game' ? 'lobby' : 'p-intro'); break;
+    case 'confirm-reset': if (isFixed(g)) { ui.sheet = null; render(); break; } ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null }; save = null; persist(); ui.sheet = null; ui.report = null; ui.pro = null; ui.tab = 'home'; invalidate('rank'); go(act === 'new-game' ? 'lobby' : 'p-intro'); break;
     case 'close-sheet': clearInterval(adTimer); ui.sheet = null; ui.tp = null; render(); break;
     case 'equip': meta.equipped = meta.equipped === v ? null : v; persistMeta(); render(); break;
     case 'share': track('share_link'); if (g) void share(g); break;
@@ -1554,6 +1747,25 @@ root.addEventListener('click', (e) => {
     case 'route-mine': rk.tab = 'mine'; location.hash = '#/rank'; if (ui.route?.name === 'rank') render(); break;
     case 'route-gallery': location.hash = '#/gallery'; break;
     case 'open-card': location.hash = `#/card/${v}`; break;
+    case 'open-person': location.hash = `#/p/${v}`; break;
+    // v3.3 로그인
+    case 'auth-link': settingsState.authMsg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
+    case 'auth-signin': {
+      if (!confirm('다른 기기에서 쓰던 계정으로 로그인할까요? 이 기기에서 연결하지 않고 쌓은 서버 기록은 그 계정으로 옮겨지지 않아요.')) break;
+      track('login_signin', { provider: v }); signInProvider(v as Provider); break;
+    }
+    case 'auth-logout': {
+      if (!settingsState.confirmLogout) { settingsState.confirmLogout = true; render(); break; }
+      logout(); invalidate(''); forgetPeople(); ui.lobbyTab = null; settingsState.confirmLogout = false; toast('로그아웃했어요'); location.hash = ''; break;
+    }
+    case 'auth-delete': {
+      if (!settingsState.confirmDelete) { settingsState.confirmDelete = true; render(); break; }
+      settingsState.confirmDelete = false;
+      void deleteAccount().then(() => { invalidate(''); forgetPeople(); toast('계정을 지웠어요'); location.hash = ''; })
+        .catch((e) => { settingsState.authMsg = e instanceof Error ? e.message : '지우지 못했어요'; render(); });
+      break;
+    }
+    case 'go-back': if (history.length > 1) history.back(); else location.hash = ''; break;
     case 'rank-tab': rk.tab = v as typeof rk.tab; render(); break;
     case 'rank-origin': rk.origin = v || null; render(); break;
     case 'save-nick': void saveNickname(); break;
@@ -1621,4 +1833,11 @@ initAnalytics();
 initRewarded();
 prefillGuest();
 applySettings();
+// v3.3 로그인 화면에서 돌아왔으면 토큰 저장
+const authBack = consumeAuthReturn();
+if (authBack) { ui.route = null; invalidate(''); }
 render();
+if (authBack) {
+  track(authBack.ok ? 'login_ok' : 'login_fail', { kind: authBack.kind });
+  toast(authBack.ok ? (authBack.kind === 'link' ? '연결했어요 · 이제 기기를 바꿔도 기록이 이어져요' : '로그인했어요') : authBack.msg ?? '로그인하지 못했어요');
+}

@@ -22,12 +22,14 @@ npm install
 npm run check     # 타입 검사. 커밋 전 항상
 npm run build     # game/dist/index.html + dist/site/*
 npm run deploy    # check + build + 맨 위 폴더로 복사
+npm run deploy:beta  # 베타만: beta/index.html (malttuk.com/beta, 검색·통계·광고 끔, 실제 서버 사용). 지금 사이트는 안 바뀜
 npm run sim       # 계급 분포 시뮬 (봇 2000판, 몇 분 걸림)
 npm run sim:gen   # 잠재력 S/A 기준 장군 비율. TERM_OFF=1, VM_ADD=2 같은 환경변수로 비교
 npm run sim:pot   # 잠재력 × 선택 실력 비교
 npm run qa        # 휴대폰 크기 브라우저로 주요 화면 열기 + 오류 0개 확인 (build 후)
 ```
 작업이 끝나면 **반드시 `npm run deploy`로 맨 위 파일까지 갱신**해서 같이 커밋한다. 안 하면 사이트에 반영되지 않는다.
+큰 업데이트는 먼저 `npm run deploy:beta`로 malttuk.com/beta에 올려 사용자가 확인한 뒤, 확인을 받으면 `npm run deploy`로 정식 반영한다.
 
 ## 절대 지킬 것
 - **실제 부대 이름·번호·위치, 무기 이름·제원, 작전 계획, 경계·대응 절차, 보고 체계, 교전 기준, 암구호를 넣지 않는다.** 실제 인물·실제 사건을 떠올리게 하는 내용도 금지. 결과는 행정적인 것만(평정·표창·인사·관계·평판).

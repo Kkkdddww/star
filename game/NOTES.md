@@ -146,3 +146,20 @@
 - 명예의 전당 시즌: `SEASON2_FROM`(11-15) 기준 `ended_on`으로 구분, 시즌 전체 순위는 한 사람당 최고 1개(`seasonRanking`). 날짜별 보기는 그대로.
 - 오늘의 기수 전역 뒤 다음 행동 2개(`dailyNext`), 한마디 답글 알림(`myReplied` + localStorage `malttuk-gb-seen`), 닉네임 사칭 막기(앱 `IMPERSONATE` + sql/2026-11-14_v3.2.sql `nick_no_staff` not valid).
 - tsconfig lib에 DOM.Iterable 추가 (TS 5.9에서 NodeList 반복 오류).
+
+## v3.3 (1단계) · 기수 대항전 준비 · 새 로비 (2026-11-14)
+- 명세: `docs/V3.3.md`. 이번 단계는 대항전 본체 + 로비. 로그인 · 인사기록카드 · 호봉은 다음 단계(구글 · 카카오 설정 필요, `docs/LOGIN_SETUP.md`).
+- SQL `sql/2026-11-14_v3.3.sql`: cohorts에 kind/no/ribbon/motto/public(대항전 기수는 번호 자동 · 마감 없음), `members`(최대 3곳 · 동기 번호 · 만든 사람 자동 가입), `runs.week` + 한 주 한 판, 뷰 `contest_board`(기수에 들어온 뒤 끝낸 판만, 상위 3명 평균 + 4번째부터 +5 최대 +50), `contest_results`(주별 순위, 2명 이상), `team_honors`(끝난 주의 참가 · 입상 · 우승), `profiles.main_cohort`.
+- 엔진: `engine/contest.ts`(weekOf · weekNo · teamScore, 첫 회차 11/30). 대항전 판은 `GameState.mode='contest'`, `week`, 세상 시드 = keyRng('malttuk-contest', 월요일), 잠재력 A. 저장 칸 `malttuk-contest-v1`.
+- 화면: `ui/contest.ts`(대항전 #/contest, 기수 만들기 #/contest/new, 대항전 기수 페이지, 표창장 #/award/코드/주, 로비 대항전 문서, 전역 화면 팀 반영, 랭킹 닉네임 옆 약장 `teamTag`), `ui/teamRibbon.ts`(바탕 8 × 모양 6 × 색 5, 별 동 · 은 · 금 + 금테).
+- 로비: 내 카드 한 줄 + 모드 타일 3개(매일 · 매주 · 언제나) + 고른 모드 문서(그 모드 순위 1~3위). 아래 바는 진행 중인 판이 있을 때만.
+- QA: `qa/contest.mjs`(12/2로 시계 고정, 가짜 대항전 응답), smoke는 탭을 먼저 누르도록 수정.
+
+## v3.3 (2단계) · 로그인 · 인사기록카드 · 호봉 · 고정 닉네임 (2026-11-14)
+- SQL(같은 v3.3 파일 뒤쪽): `profiles.serial`(군번, 기존은 created_at 순서로 채움) · `nick_changed_at`, 트리거 `nick_rules`(새로/바꿀 때만 겹침 금지, 바꾸기 7일 1회, upsert INSERT 경로는 같은 이름이면 통과 → 예전부터 겹치던 이름도 업로드 가능), 뷰 `profile_stats`(경험치 = 20 + 5×계급 + 오늘의 기수 30 · 대항전 20, 자유는 하루 5판까지), `daily_places`, 함수 `delete_me()`.
+- 로그인(`net/api.ts`): 라이브러리 없이 GoTrue REST. 연결 = `GET /auth/v1/user/identities/authorize?skip_http_redirect=true`(익명 계정 그대로, Supabase "manual linking" 필요), 다른 기기 로그인 = `/auth/v1/authorize`. 돌아온 주소의 `#access_token`은 `consumeAuthReturn()`이 첫 렌더 전에 저장하고 주소를 지움. 연결 여부는 JWT `is_anonymous`·`app_metadata.providers`.
+- 고정 닉네임: 프로필이 있으면 업로드는 버튼만. 랭킹 줄 이름은 판 기록 대신 프로필 닉네임(`nameOf`, 대표 기수 약장과 한 번에 불러옴).
+- 인사기록카드 `ui/person.ts`(#/p/아이디, #/p/me): 랭킹 줄 · 시상대 · 기수 명부 · 점수 반영 줄에서 열림. 호봉 `engine/hobong.ts`(n→n+1 필요 200+15(n−1), 30호봉 약 두 달).
+- 설정: 계정(구글 · 카카오 연결, 다른 기기 계정으로 로그인, 로그아웃, 계정 삭제). 개인정보처리방침 수정(로그인 · 인사기록카드 · 계정 삭제).
+- 기수 만들기는 로그인(연결) 필요. 꾸미기 해금(5호봉마다)은 아직 없음.
+- 베타 주소: `npm run deploy:beta` → 저장소 맨 위 `beta/index.html` (malttuk.com/beta). noindex, GA · 애드센스 끔, 로비 제목 옆 "베타". 같은 도메인이라 localStorage · 로그인 세션 · Supabase를 지금 사이트와 같이 씀. robots.txt에 `Disallow: /beta/`. v3.3은 베타로 먼저 내고, 확인 뒤 `npm run deploy`로 정식 반영.
