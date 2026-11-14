@@ -14,7 +14,7 @@ import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, 
 import { asg, assignmentsFor, isRequired, lacksRequired, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
 import { RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
-import { careerScore, promotionBreakdown, weakestStats } from '../engine/promotion';
+import { careerScore, meritLine, promotionBreakdown, weakestStats } from '../engine/promotion';
 import { graduate, rollOrigin, SCHOOL_MOMENTS, type Graduation } from '../engine/school';
 import { eul, eunNeun, hasJong, iga, ro } from '../engine/text';
 import { STAT_KEYS, STAT_LABEL, type Branch, type DeskResult, type Outcome, type GameState, type Origin, type Path, type Policy, type Potential, type Rank, type SchoolFocus, type StatKey, type Stats, type YearReport } from '../engine/types';
@@ -54,7 +54,7 @@ function useSlot(sl: Slot) {
   persist();
   slot = sl;
   save = read<Save>(SLOT_KEY[sl]);
-  ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null };
+  ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null, sugg: [] };
   ui.report = null; ui.queue = []; ui.tab = 'home';
 }
 const isDaily = (g: GameState | null | undefined) => g?.mode === 'daily';
@@ -132,7 +132,7 @@ const ui = {
   ad: { kind: 'eval' as 'eval' | 'reroll', left: 0 },
   pro: null as Prologue | null,
   newRibbons: [] as string[],
-  upload: { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null as string | null },
+  upload: { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null as string | null, sugg: [] as string[] },
   adBusy: false,
   medals: [] as Earned[],
   tp: null as { key: string; rec: [StatKey, StatKey] } | null,
@@ -671,14 +671,14 @@ function viewRecord(g: GameState): string {
     <div class="hd"><span>지금 심사를 받는다면</span><em>${RANKS[rankCount(me.rank) + 1]} 진급</em></div>
     <div class="bd">
       ${REQUIRED_BILLET[me.rank] ? `<div class="kv" style="margin-bottom:14px"><span>필수 보직</span><b>${REQUIRED_BILLET[me.rank]!.label} ${lacksRequired(me) ? '<span class="chip red">아직 안 함</span>' : '<span class="chip on">완료</span>'}</b></div>` : ''}
-      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, `55 + 핵심 ${me.rankLog.core ? 25 : 0} + 보조 ${Math.min(2, me.rankLog.support.length) * 10}${me.origin === '육사' ? ' + 출신 3' : ''}`], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
+      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, `55 + 핵심 ${me.rankLog.core ? 25 : 0} + 보조 ${Math.min(2, me.rankLog.support.length) * 10}${me.origin === '육사' ? ' + 출신 3' : ''}`], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
         .filter((x) => x[1] > 0).map(([l, w, v, d]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(w * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track light"><div style="width:${v}%"></div></div><p class="faint" style="margin-top:4px">${d}</p></div>`).join('')}
     </div>
   </section>` : ''}
   ${save!.potentialSeen ? `<section class="doc"><div class="hd"><span>교관 평가서</span><em>임관 당시</em></div><div class="bd"><div class="kv"><span>잠재력${save!.potentialSeen.includes('~') ? ' 범위' : ''}</span><b class="olive">${save!.potentialSeen}${save!.potentialSeen.includes('~') ? '' : '등급'}</b></div></div></section>` : ''}
   <section class="doc">
     <div class="hd"><span>규칙 한눈에</span></div>
-    <div class="bd"><p class="body">1년 성장은 숨은 <b>잠재력</b>과 <b>나이</b>로 정해지고, 절반은 보직 능력치·절반은 집중 육성으로 가요. <b>결재</b> 결과는 나이와 상관없이 바로 더해져요. 진급은 <b>평정·경력·교육·역량 균형</b>을 동기와 비교해 정원만큼 선발해요. 대위는 <b>중대장</b>, 중령은 <b>대대장</b>, 대령은 <b>연대장이나 본부 과장</b>을 거쳐야 심사를 받을 수 있어요. 능력치는 80을 넘으면 덜 올라요.</p></div>
+    <div class="bd"><p class="body">1년 성장은 숨은 <b>잠재력</b>과 <b>나이</b>로 정해지고, 절반은 보직 능력치·절반은 집중 육성으로 가요. <b>결재</b> 결과는 나이와 상관없이 바로 더해져요. 진급은 <b>평정·경력·공적(이 계급의 표창·무사고 지휘)·교육·역량 균형</b>을 동기와 비교해 정원만큼 선발해요. 대위는 <b>중대장</b>, 중령은 <b>대대장</b>, 대령은 <b>연대장이나 본부 과장</b>을 거쳐야 심사를 받을 수 있어요. 능력치는 80을 넘거나 잠재력 한계에 가까우면 덜 오르지만 멈추지는 않아요.</p></div>
   </section>`;
 }
 
@@ -955,7 +955,7 @@ function viewPromotion(r: YearReport): string {
   const p = r.promotion!;
   const lastTry = !p.selected && p.attempt >= p.tries;
   const w = PROMOTION[p.from]!.weights;
-  const parts = ([['평정', w.eval, p.breakdown.eval], ['경력', w.career, p.breakdown.career], ['교육', w.edu, p.breakdown.edu], ['전투', w.combat, p.breakdown.combat], ['균형', w.balance, p.breakdown.balance]] as [string, number, number][]).filter((x) => x[1] > 0);
+  const parts = ([['평정', w.eval, p.breakdown.eval], ['경력', w.career, p.breakdown.career], ['공적', p.breakdown.merit === undefined ? 0 : w.merit, p.breakdown.merit ?? 0], ['교육', w.edu, p.breakdown.edu], ['전투', w.combat, p.breakdown.combat], ['균형', w.balance, p.breakdown.balance]] as [string, number, number][]).filter((x) => x[1] > 0);
   const peers = [...p.peers].sort((a, b) => b.score - a.score).slice(0, 6);
   return `
   <div class="page"><div class="pad tight">
@@ -969,7 +969,7 @@ function viewPromotion(r: YearReport): string {
         <div class="kv"><span>남은 기회</span><b>${p.selected ? '-' : lastTry ? '없음' : `${p.tries - p.attempt}번`}</b></div>
       </div>
       ${parts.map(([l, wt, v]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(wt * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track ${l === p.weakest.label && !p.selected ? 'light' : ''}"><div style="width:${v}%"></div></div></div>`).join('')}
-      ${!p.selected ? `<div class="opinion"><p class="faint">가장 아쉬웠던 항목 · ${p.weakest.label}</p><p>${p.weakest.why}</p></div>` : ''}
+      ${!p.selected ? `<div class="opinion">${p.cut !== null && p.cut - p.score <= 3 ? `<p><b>아깝게 떨어졌어요 · ${(Math.round((p.cut - p.score) * 10) / 10).toFixed(1)}점 차</b></p>` : ''}<p class="faint">더 올려볼 항목 · ${p.weakest.label}</p><p>${p.weakest.why}</p></div>` : ''}
     </div>
     <p class="sec">함께 심사받은 동기</p>
     ${peers.length ? peers.map((x) => `<div class="mate"><div class="g"><b>${esc(x.name)} ${x.rival ? '<span class="chip red">라이벌</span>' : ''}</b><span>${x.origin} · ${x.score.toFixed(1)}점</span></div><span class="chip ${x.selected ? '' : 'gray'}">${x.selected ? '선발' : '낙천'}</span></div>`).join('') : '<p class="sub">함께 심사받은 동기가 없어요.</p>'}
@@ -1203,6 +1203,14 @@ function endingCard(g: GameState): CardData & { titleId: string | null } {
   };
 }
 
+/** 겹치는 닉네임일 때 추천 3개 (12자 안) */
+function nickSuggestions(base: string): string[] {
+  const b = base.trim().slice(0, 9) || '말뚝';
+  const r = () => String(Math.floor(Math.random() * 90) + 10);
+  const out = new Set<string>([`${b}${r()}`, `${b}_${Math.floor(Math.random() * 9) + 1}`, `${b.slice(0, 7)}${r()}${Math.floor(Math.random() * 10)}`]);
+  return [...out].filter((x) => !nicknameProblem(x)).slice(0, 3);
+}
+
 /** 전역 화면: 이번 판 경험치와 호봉 (서버 기록 기준) */
 function hobongLine(): string {
   const me = myId();
@@ -1229,6 +1237,7 @@ function uploadBox(): string {
     <label class="lbl" for="upnick" style="margin:14px 0 6px">랭킹에 보일 닉네임 · 한 번 정하면 계속 써요</label>
     <input id="upnick" class="inp" style="height:50px;background:var(--bg)" maxlength="12" placeholder="닉네임 (2~12자)" value="${esc(u.nick)}">`}
     ${u.msg ? `<p class="small" style="margin-top:8px;color:var(--red)">${esc(u.msg)}</p>` : ''}
+    ${u.sugg.length && !u.fixed ? `<div class="chips" style="margin-top:8px">${u.sugg.map((x) => `<button class="chip on" data-act="nick-suggest" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -1320,6 +1329,8 @@ async function upload(g: GameState) {
     track('rank_upload', { final_rank: g.ended!.finalRank });
   } catch (e) {
     if (e instanceof AlreadyError) { u.msg = e.message; u.fails = 2; u.busy = false; render(); return; }
+    // 닉네임 겹침은 서버 문제가 아니라서 실패로 세지 않고, 비슷한 이름을 추천해요
+    if (e instanceof Error && /닉네임/.test(e.message)) { u.msg = `${e.message}. 다른 이름을 골라 주세요`; u.sugg = nickSuggestions(nick); u.busy = false; render(); return; }
     u.fails++;
     u.msg = `올리지 못했어요 · ${e instanceof Error ? e.message : '알 수 없는 오류'}`;
   }
@@ -1729,7 +1740,7 @@ root.addEventListener('click', (e) => {
       const game = startGame();
       const focus: [StatKey, StatKey] = p.focus.includes('리더십') ? ['command', 'tactics'] : p.focus.includes('학업') ? ['expertise', 'admin'] : ['command', 'social'];
       save = { game, focus, potentialSeen: p.fixedPot ?? p.range, metaApplied: false, log: [], runId: null };
-      ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null };
+      ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null, sugg: [] };
       persist();
       go('p-commission');
       break;
@@ -1749,7 +1760,7 @@ root.addEventListener('click', (e) => {
     case 'open-reset': ui.sheet = 'reset'; render(); break;
     case 'new-game': if (isFixed(g)) { ui.sheet = null; ui.report = null; useSlot('free'); go('lobby'); break; }
     // falls through
-    case 'confirm-reset': if (isFixed(g)) { ui.sheet = null; render(); break; } ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null }; save = null; persist(); ui.sheet = null; ui.report = null; ui.pro = null; ui.tab = 'home'; invalidate('rank'); go(act === 'new-game' ? 'lobby' : 'p-intro'); break;
+    case 'confirm-reset': if (isFixed(g)) { ui.sheet = null; render(); break; } ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null, sugg: [] }; save = null; persist(); ui.sheet = null; ui.report = null; ui.pro = null; ui.tab = 'home'; invalidate('rank'); go(act === 'new-game' ? 'lobby' : 'p-intro'); break;
     case 'close-sheet': clearInterval(adTimer); ui.sheet = null; ui.tp = null; render(); break;
     case 'equip': meta.equipped = meta.equipped === v ? null : v; persistMeta(); render(); break;
     case 'share': track('share_link'); if (g) void share(g); break;
@@ -1776,6 +1787,11 @@ root.addEventListener('click', (e) => {
     case 'open-person': location.hash = `#/p/${v}`; break;
     // v3.3 로그인
     case 'auth-link': settingsState.authMsg = ''; loginState.msg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = loginState.msg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
+    case 'nick-suggest': {
+      if (ui.route?.name === 'login') { loginState.nick = v; loginState.nickMsg = ''; }
+      else { ui.upload.nick = v; ui.upload.msg = ''; ui.upload.sugg = []; }
+      render(); break;
+    }
     case 'nick-set': {
       const n = (val('lnick') ?? loginState.nick).trim();
       loginState.nick = n;
@@ -1785,7 +1801,7 @@ root.addEventListener('click', (e) => {
       void saveProfile(n, null).then(() => {
         loginState.busy = false; invalidate('profile'); invalidate('person'); forgetPeople();
         toast(`'${n}' 이름으로 시작해요`); location.hash = '';
-      }).catch((e) => { loginState.busy = false; loginState.nickMsg = e instanceof Error ? e.message.replace(/^서버 오류 \d+ · /, '') : '저장하지 못했어요'; render(); });
+      }).catch((e) => { loginState.busy = false; loginState.nickMsg = e instanceof Error ? e.message.replace(/^서버 오류 \d+ · /, '') : '저장하지 못했어요'; loginState.sugg = /닉네임/.test(loginState.nickMsg) ? nickSuggestions(n) : []; render(); });
       break;
     }
     case 'auth-signin': loginState.conflict = null; track('login_signin', { provider: v }); signInProvider(v as Provider); break;

@@ -28,7 +28,7 @@ export function createOfficer(o: { id: string; name: string; origin: Origin; bra
     hidden: { potential: o.potential, risk: 0 },
     assignmentId: 'platoon', yearsInAssignment: 0,
     active: true, evals: [], evalsInRank: [],
-    rankLog: { core: false, support: [] }, billets: ['platoon'], tags: [],
+    rankLog: { core: false, support: [] }, merit: [], meritSeen: { a: 0, m: 0 }, billets: ['platoon'], tags: [],
     longService: ORIGIN[o.origin].longServiceExempt ? 'exempt' : 'pending',
     eduScore: 60, eduDone: 0, reviewFails: 0, awakenings: 0, eventLog: {}, chains: [],
     schoolPct: o.schoolPct ?? 50,
@@ -89,6 +89,7 @@ export function stepOfficer(o: Officer, year: number, focus: [StatKey, StatKey],
 
   const events = buildYearEvents(o, year, desk, rng);
   let score = evalScore(events);
+  let goalHit = false, cleanYear = false;
   for (const e of events) if (e.kind !== 'choice') addStats(o, e.statBonus, deltas);
 
   // 임기 진행과 목표 판정 (임기 2년째 평정 때)
@@ -105,6 +106,7 @@ export function stepOfficer(o: Officer, year: number, focus: [StatKey, StatKey],
       if (t.done) {
         score = Math.min(100, score + g.bonus);
         o.log.awards.push({ group: rankGroup(o.rank) });
+        goalHit = true;
         events.push({ id: 'term_goal', kind: 'good', title: '임기 목표 달성', detail: `${g.text} · 평정 +${g.bonus}, 표창`, tag: '달성', evalEffect: g.bonus, tone: 'good' });
       } else {
         events.push({ id: 'term_goal', kind: 'milestone', title: '임기 목표 미달', detail: g.text, tag: '미달', evalEffect: 0, tone: 'neutral' });
@@ -132,8 +134,13 @@ export function stepOfficer(o: Officer, year: number, focus: [StatKey, StatKey],
   }
   if (a.kind === '지휘') {
     o.log.cleanCommand = badThisYear ? 0 : o.log.cleanCommand + 1;
+    cleanYear = !badThisYear;
     o.log.cleanCommandBest = Math.max(o.log.cleanCommandBest, o.log.cleanCommand);
   }
+  // v3.3.4 공적 기록: 올해 새로 받은 표창(임기 목표 표창 포함)·큰 표창·무사고 지휘·임기 목표
+  const seen = o.meritSeen ?? { a: o.log.awards.length - (goalHit ? 1 : 0), m: o.log.majorAwards }; // 옛 저장: 지난 공적은 0으로 시작
+  (o.merit ??= []).push({ a: o.log.awards.length - seen.a - (goalHit ? 1 : 0), m: o.log.majorAwards - seen.m, c: cleanYear ? 1 : 0, g: goalHit ? 1 : 0 });
+  o.meritSeen = { a: o.log.awards.length, m: o.log.majorAwards };
   if (score >= 75) { o.log.suStreak += 1; o.log.suStreakBest = Math.max(o.log.suStreakBest, o.log.suStreak); } else o.log.suStreak = 0;
 
   // 잠재력 각성

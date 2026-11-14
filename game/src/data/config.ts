@@ -9,15 +9,15 @@ export const MIN_YEARS: Partial<Record<Rank, number>> = {
 };
 export const AUTO_PROMOTE: Rank[] = ['소위', '중위'];
 
-export type PromoWeights = { eval: number; career: number; edu: number; combat: number; balance: number };
+export type PromoWeights = { eval: number; career: number; edu: number; combat: number; balance: number; merit: number };
 export const PROMOTION: Partial<Record<Rank, { cumulative: number; tries: number; weights: PromoWeights }>> = {
-  대위: { cumulative: 0.7, tries: 3, weights: { eval: 0.45, career: 0.2, edu: 0.1, combat: 0.1, balance: 0.15 } },
-  소령: { cumulative: 0.6, tries: 3, weights: { eval: 0.45, career: 0.25, edu: 0.15, combat: 0, balance: 0.15 } },
-  중령: { cumulative: 0.5, tries: 3, weights: { eval: 0.45, career: 0.25, edu: 0.15, combat: 0, balance: 0.15 } },
-  대령: { cumulative: 0.35, tries: 4, weights: { eval: 0.4, career: 0.35, edu: 0.1, combat: 0, balance: 0.15 } },
-  준장: { cumulative: 0.45, tries: 2, weights: { eval: 0.4, career: 0.35, edu: 0.1, combat: 0, balance: 0.15 } },
-  소장: { cumulative: 0.4, tries: 2, weights: { eval: 0.4, career: 0.35, edu: 0.1, combat: 0, balance: 0.15 } },
-  중장: { cumulative: 0.3, tries: 2, weights: { eval: 0.4, career: 0.35, edu: 0.1, combat: 0, balance: 0.15 } },
+  대위: { cumulative: 0.7, tries: 3, weights: { eval: 0.4, career: 0.15, merit: 0.15, edu: 0.05, combat: 0.1, balance: 0.15 } },
+  소령: { cumulative: 0.6, tries: 3, weights: { eval: 0.4, career: 0.2, merit: 0.15, edu: 0.1, combat: 0, balance: 0.15 } },
+  중령: { cumulative: 0.5, tries: 3, weights: { eval: 0.4, career: 0.2, merit: 0.15, edu: 0.1, combat: 0, balance: 0.15 } },
+  대령: { cumulative: 0.35, tries: 4, weights: { eval: 0.35, career: 0.3, merit: 0.15, edu: 0.05, combat: 0, balance: 0.15 } },
+  준장: { cumulative: 0.45, tries: 2, weights: { eval: 0.35, career: 0.3, merit: 0.15, edu: 0.05, combat: 0, balance: 0.15 } },
+  소장: { cumulative: 0.4, tries: 2, weights: { eval: 0.35, career: 0.3, merit: 0.15, edu: 0.05, combat: 0, balance: 0.15 } },
+  중장: { cumulative: 0.3, tries: 2, weights: { eval: 0.35, career: 0.3, merit: 0.15, edu: 0.05, combat: 0, balance: 0.15 } },
 };
 
 /** 필수 보직: 이 계급에서 다음 계급 심사를 받으려면 반드시 거쳐야 하는 보직 (하나라도) */
@@ -42,13 +42,17 @@ export const CAREER = { base: 55, core: 25, support: 10, supportMax: 2 };
 
 export const GENERAL_TERM = 3;
 export const REVIEW_NOISE = 3;
+/** v3.3.4 공적 점수 = 40 + 표창 5 + 큰 표창 10 + 무사고 지휘 1년 3 + 임기 목표 6 (최근 4년 합, 최대 100). 임기 목표 표창은 목표 점수에 포함 */
+export const MERIT = { base: 40, award: 5, major: 10, clean: 3, goal: 6 };
+/** v3.3.4 잠재력 상한 근처에서도 기본 성장이 이 비율만큼은 남는다 (상한이 천장이 되지 않게) */
+export const GROWTH_FLOOR = 0.3;
 
-/** 성장 C안: 잠재력별 기본 성장(나이 적용), 종합 능력치 상한. 이벤트 보상은 나이와 무관 */
+/** 성장 C안: 잠재력별 기본 성장(나이 적용), 종합 능력치 상한. 이벤트 보상은 나이와 무관. v3.3.4: A·B·C 성장↑ 상한↑ (S 대비 격차 축소) */
 export const POTENTIAL: Record<Potential, { min: number; max: number; cap: number; label: string }> = {
   S: { min: 11, max: 13, cap: 90, label: '타고난 지휘관감. 어느 자리에서든 빠르게 큽니다' },
-  A: { min: 9, max: 11, cap: 87, label: '꾸준히 성장할 재목. 기회를 잡으면 멀리 갑니다' },
-  B: { min: 8, max: 10, cap: 84, label: '성실한 평균형. 경험이 쌓일수록 단단해집니다' },
-  C: { min: 7, max: 9, cap: 81, label: '늦게 피는 꽃. 계기를 만나면 달라질 수 있습니다' },
+  A: { min: 10, max: 12, cap: 88, label: '꾸준히 성장할 재목. 기회를 잡으면 멀리 갑니다' },
+  B: { min: 10, max: 11, cap: 86, label: '성실한 평균형. 경험이 쌓일수록 단단해집니다' },
+  C: { min: 9, max: 11, cap: 85, label: '늦게 피는 꽃. 계기를 만나면 달라질 수 있습니다' },
 };
 export function ageFactor(age: number): number {
   if (age < 30) return 1.0;

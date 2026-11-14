@@ -74,6 +74,9 @@ export interface Officer {
   evalsInRank: number[];
   /** 현재 계급의 경력: 핵심(지휘·요직) 경험, 보조 보직 id들 */
   rankLog: { core: boolean; support: string[] };
+  /** v3.3.4 공적: 해마다 새로 받은 표창(a)·큰 표창(m)·무사고 지휘(c)·임기 목표 달성(g). 진급 점수는 최근 4년 합 */
+  merit?: { a: number; m: number; c: number; g: number }[];
+  meritSeen?: { a: number; m: number };
   /** 지금까지 맡은 보직 id (순서대로, 중복 없음) */
   billets: string[];
   /** 경험 태그 (중복 없음) */
@@ -213,7 +216,7 @@ export interface PromotionResult {
   selectedCount: number;
   /** 함께 심사받은 다른 기수 인원 */
   others: number;
-  breakdown: { eval: number; career: number; edu: number; combat: number; balance: number };
+  breakdown: { eval: number; career: number; edu: number; combat: number; balance: number; merit?: number };
   weakest: { label: string; why: string };
   peers: { name: string; origin: Origin; selected: boolean; score: number; rival: boolean }[];
 }
