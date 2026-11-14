@@ -29,7 +29,7 @@ import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk,
 import { loginState } from './login';
 import { forgetPeople, contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
 import { randomRibbon, teamRibbon } from './teamRibbon';
-import { AlreadyError, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
+import { AlreadyError, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
 
 // ───────── 저장 ─────────
 interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number }
@@ -292,7 +292,7 @@ function meCard(best: number): string {
   const mine = myTeamsNow();
   const main = mine?.find((t) => t.cohort_id === p?.main_cohort) ?? mine?.[0];
   const me = myId();
-  const st = me && p ? load(`person:stats:${me}`, () => statsOf(me).catch(() => null)) : null;
+  const st = me && p ? load(`person:stats:${me}`, () => myStatsCached(me).catch(() => null)) : null;
   const hb = st?.state === 'ok' && st.data ? hobongOf(st.data.xp) : null;
   const runs = st?.state === 'ok' && st.data ? st.data.runs : meta.runs ?? 0;
   if (st?.state === 'ok' && st.data) best = Math.max(best, st.data.best_rank);
@@ -1207,7 +1207,7 @@ function endingCard(g: GameState): CardData & { titleId: string | null } {
 function hobongLine(): string {
   const me = myId();
   if (!me || !save?.game) return '';
-  const st = load(`person:stats:${me}`, () => statsOf(me).catch(() => null));
+  const st = load(`person:stats:${me}`, () => myStatsCached(me).catch(() => null));
   if (st.state !== 'ok' || !st.data) return '';
   const g = save.game;
   const mode = isDaily(g) ? 'daily' : isContest(g) ? 'contest' : isGroup(g) ? 'cohort' : 'free';
@@ -1314,7 +1314,7 @@ async function upload(g: GameState) {
     if (isGroup(g)) invalidate('grpruns');
     save!.runId = id; persist();
     if (!isFixed(g)) bumpFreeToday();
-    ui.upload.fixed = nick; invalidate('person');
+    ui.upload.fixed = nick; invalidate('person'); unstash('stats');
     invalidate('rank'); invalidate('gallery'); invalidate('mine'); invalidate('profile');
     toast('랭킹에 올렸어요');
     track('rank_upload', { final_rank: g.ended!.finalRank });

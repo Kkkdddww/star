@@ -13,7 +13,7 @@ import { prepareCard } from './cardImage';
 import { viewGroup, viewGroupHub, viewGuestbook } from './group';
 import { viewPerson } from './person';
 import { viewLogin } from './login';
-import { forgetPeople, nameOf, teamTag, viewAward, viewContest, viewTeamForm } from './contest';
+import { forgetPeople, hobongTag, nameOf, teamTag, viewAward, viewContest, viewTeamForm } from './contest';
 import { ribbonRack } from './ribbon';
 
 export interface CardData {
@@ -120,7 +120,7 @@ export function rowHtml(r: RunRow, n: number | null): string {
   return `<button class="rrow ${me ? 'me' : ''}" data-act="open-person" data-v="${r.user_id}">
     ${n !== null ? `<span class="no">${n}</span>` : ''}
     <span class="ri">${insignia(r.final_rank as Rank, 22, false)}</span>
-    <span class="g"><b>${esc(nameOf(r.user_id, r.nickname))}${teamTag(r.user_id)}${me ? ' <span class="chip on">나</span>' : ''}</b><span>${esc(r.best_billet ?? r.final_rank)} · ${esc(r.origin)} · 평정 탁월 ${r.su_count}회</span></span>
+    <span class="g"><b>${esc(nameOf(r.user_id, r.nickname))}${hobongTag(r.user_id)}${teamTag(r.user_id)}${me ? ' <span class="chip on">나</span>' : ''}</b><span>${esc(r.best_billet ?? r.final_rank)} · ${esc(r.origin)} · 평정 탁월 ${r.su_count}회</span></span>
     <span class="rv">${r.honor !== null && r.honor !== undefined ? `명예 ${r.honor}` : r.rank_index >= 6 ? `★ ${r.rank_index - 5}` : `약장 ${(r.ribbons ?? []).length}`}</span>
   </button>`;
 }
@@ -130,7 +130,7 @@ function podium(list: RunRow[]): string {
   return `<div class="podium">${top.map((r, i) => {
     if (!r) return '<div class="pd empty"></div>';
     const place = i === 1 ? 1 : i === 0 ? 2 : 3;
-    return `<button class="pd ${place === 1 ? 'first' : ''}" data-act="open-person" data-v="${r.user_id}"><span class="pn">${place}</span>${insignia(r.final_rank as Rank, place === 1 ? 46 : 38)}<b>${esc(nameOf(r.user_id, r.nickname))}${teamTag(r.user_id)}</b><span>${esc(r.best_billet ?? r.final_rank)} · ${esc(r.origin)}</span>${r.title ? `<i class="chip on">${esc(r.title)}</i>` : ''}</button>`;
+    return `<button class="pd ${place === 1 ? 'first' : ''}" data-act="open-person" data-v="${r.user_id}"><span class="pn">${place}</span>${insignia(r.final_rank as Rank, place === 1 ? 46 : 38)}<b>${esc(nameOf(r.user_id, r.nickname))}${hobongTag(r.user_id)}${teamTag(r.user_id)}</b><span>${esc(r.best_billet ?? r.final_rank)} · ${esc(r.origin)}</span>${r.title ? `<i class="chip on">${esc(r.title)}</i>` : ''}</button>`;
   }).join('')}</div>`;
 }
 
