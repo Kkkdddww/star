@@ -271,6 +271,16 @@ export const teamHistory = (cohortId: string) => rest<BoardRow[]>(`contest_board
 export const teamPlaces = (cohortId: string) => rest<BoardRow[]>(`contest_results?cohort_id=eq.${cohortId}&select=*&order=week.desc&limit=60`);
 export interface Honors { cohort_id: string; weeks: number; podiums: number; wins: number }
 export const teamHonors = async (ids: string[]): Promise<Honors[]> => (ids.length ? rest<Honors[]>(`team_honors?cohort_id=in.(${ids.join(',')})&select=*`) : []);
+/** 지금까지 모인 대항전 기수 수 · 기수원 수 (시작 전 표시용) */
+export async function contestTotals(): Promise<{ teams: number; people: number }> {
+  const cnt = async (path: string) => {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { apikey: SUPABASE_KEY, Prefer: 'count=exact' } });
+    if (!res.ok) throw new Error(`서버 오류 ${res.status}`);
+    return Number(res.headers.get('content-range')?.split('/')[1] ?? 0);
+  };
+  const [teams, people] = await Promise.all([cnt('cohorts?select=id&kind=eq.contest&limit=1'), cnt('members?select=user_id&limit=1')]);
+  return { teams, people };
+}
 export const publicTeams = () => rest<CohortRow[]>(`cohorts?kind=eq.contest&public=eq.true&select=*&order=created_at.desc&limit=40`);
 /** 그 주 대항전 판 (기수원들) */
 export const weekRuns = (week: string, userIds: string[]) => (userIds.length ? rest<RunRow[]>(`runs?select=${LIST}&mode=eq.contest&week=eq.${week}&user_id=in.(${userIds.join(',')})&${DORDER}&limit=60`) : Promise.resolve([] as RunRow[]));

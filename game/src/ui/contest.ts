@@ -3,7 +3,7 @@
 import { CONTEST_FROM, contestOpen, daysLeftInWeek, MAX_TEAMS, personScore, teamScore, weekEnd, weekNo, weekOf, prevWeek } from '../engine/contest';
 import type { Rank } from '../engine/types';
 import {
-  contestBoard, getProfile, memberCounts, myId, myTeams, nicknames, publicTeams, teamHonors, teamMembers, teamPlaces, teamTags, today, weekRuns,
+  contestBoard, contestTotals, getProfile, memberCounts, myId, myTeams, nicknames, publicTeams, teamHonors, teamMembers, teamPlaces, teamTags, today, weekRuns,
   type BoardRow, type CohortRow, type Honors, type MyTeam, type RunRow,
 } from '../net/api';
 import { awards } from './group';
@@ -20,6 +20,9 @@ export const cs = { name: '', motto: '', ribbon: [0, 0, 1] as number[], pub: tru
 
 /** 이번 회차 월요일. 첫 회차 전이면 첫 회차 */
 export const curWeek = () => (contestOpen(today()) ? weekOf(today()) : CONTEST_FROM);
+/** 시작 전: 지금까지 모인 기수 · 사람 */
+const totalsL = () => load('contest:totals', contestTotals);
+const totalsText = () => { const t = totalsL(); return t.state === 'ok' ? `${t.data.teams}개 기수 · ${t.data.people}명` : null; };
 const dLeft = () => (contestOpen(today()) ? daysLeftInWeek(today()) : null);
 const docNo = (week: string) => `제${week.slice(0, 4)}-${weekNo(week)}호`;
 
@@ -52,7 +55,7 @@ const scoreCell = (score: number | string, sub = '') => `<span class="tsc"><b>${
 
 // ── 로비: 타일 한 줄 · 대항전 문서 ──
 export function contestTileSub(): string {
-  if (!contestOpen(today())) return `<span class="todo">${md(CONTEST_FROM)} 시작</span>`;
+  if (!contestOpen(today())) { const t = totalsL(); return t.state === 'ok' && t.data.teams ? `<span class="todo">${t.data.teams}개 기수</span> · ${md(CONTEST_FROM)}` : `<span class="todo">${md(CONTEST_FROM)} 시작</span>`; }
   const mine = myTeamsNow();
   const left = `D-${dLeft()}`;
   if (!mine?.length) return `기수 없음 · ${left}`;
@@ -71,7 +74,7 @@ export function contestDoc(play: { label: string; act: string }): string {
   const head = `<div class="hd">
     <div class="dn">주간 공문 · ${docNo(week)} · ${md(week)}~${md(weekEnd(week))}${open ? ` · <b>D-${dLeft()}</b>` : ''}</div>
     <div class="tt">기수 대항전<em>${open ? `${rows.length}개 기수` : `첫 회차 ${md(CONTEST_FROM)}(월)`}</em></div>
-    ${mine?.length ? '' : '<p class="ds">팀으로 겨루는 한 주 · 못하는 친구를 불러도 점수가 깎이지 않아요</p>'}
+    ${!open && totalsText() ? `<p class="ds">지금까지 <b class="olive">${totalsText()}</b>이 모였어요</p>` : mine?.length ? '' : '<p class="ds">팀으로 겨루는 한 주 · 못하는 친구를 불러도 점수가 깎이지 않아요</p>'}
   </div>`;
   let body = '';
   if (mine?.length) {
@@ -86,7 +89,7 @@ export function contestDoc(play: { label: string; act: string }): string {
     body += `<div class="lk"><span>이번 주 순위</span><a href="#/contest">전체 ›</a></div>`;
     body += rows.slice(0, 3).map((r, i) => teamRow({ n: r.place ?? i + 1, ribbon: r.ribbon, name: r.name, sub: `${r.no ?? '-'}기 · 전역 ${r.n}명`, right: scoreCell(r.score), href: `#/c/${r.code}`, hon: honorOf(ids, r.cohort_id), w: 36 })).join('');
   } else if (open) body += `<p class="sub" style="margin-top:8px">아직 순위에 오른 기수가 없어요. 전역 2명이면 순위에 올라요.</p>`;
-  else if (!mine?.length) body += `<p class="sub" style="margin-top:4px">${md(CONTEST_FROM)}(월)부터 매주 열려요. 지금 기수를 만들어 동기를 모아 두세요.</p>`;
+  else if (!mine?.length) body += `<p class="sub" style="margin-top:4px">${md(CONTEST_FROM)}(월) 0시부터 매주 열려요. 지금 기수를 만들거나 들어가 두세요.</p>`;
   const btns = mine?.length
     ? `<div class="two"><button class="btn line" data-act="grp-share" data-v="${mine[0].cohorts.code}">동기 부르기</button><button class="btn" data-act="${play.act}" ${open ? '' : 'disabled'}>${open ? play.label : `${md(CONTEST_FROM)}부터 출전`}</button></div>`
     : `<div class="two"><button class="btn line" data-act="team-new">기수 만들기</button><button class="btn" data-act="team-random">아무 기수나 들어가기</button></div>`;
@@ -126,7 +129,7 @@ export function viewContest(): string {
     <div class="tt">제${weekNo(week)}주 기수 대항전<em>${open ? `D-${dLeft()}` : `${md(CONTEST_FROM)} 시작`}</em></div>
     <p class="ds">${md(week)}(월) ~ ${md(weekEnd(week))}(일) 24시 · 모든 기수가 같은 세상, 난이도 보통 · 한 사람 한 주 한 판</p>
   </div><div class="bd">
-    <div class="kv"><span>참가</span><b>${rows.length}개 기수 · ${rows.reduce((a, r) => a + r.n, 0)}명</b></div>
+    <div class="kv"><span>${open ? '참가' : '지금까지 모임'}</span><b>${open ? `${rows.length}개 기수 · ${rows.reduce((a, r) => a + r.n, 0)}명` : totalsText() ?? '불러오는 중…'}</b></div>
     <div class="kv"><span>팀 점수</span><b>상위 3명 평균 + 4번째부터 +5</b></div>
     <div class="kv"><span>포상</span><b>1~3위 표창장 · 약장에 별</b></div>
   </div></section>`;
