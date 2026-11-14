@@ -1229,7 +1229,7 @@ function viewEnding(g: GameState): string {
     ui.upload.loaded = true;
     track('game_end', { final_rank: g.ended!.finalRank, years: g.history.length, reason: String(g.ended!.reason ?? '') });
     ui.upload.nick = me.name;
-    getProfile().then((p) => { if (p && !save?.runId) { ui.upload.nick = p.nickname; ui.upload.fixed = p.nickname; render(); } }).catch(() => {});
+    getProfile().then((p) => { if (p && !save?.runId) { ui.upload.nick = p.nickname; ui.upload.fixed = nicknameProblem(p.nickname) ? null : p.nickname; if (!ui.upload.fixed) ui.upload.msg = '지금 닉네임은 쓸 수 없는 이름이에요. 새 닉네임을 정해 주세요'; render(); } }).catch(() => {});
   }
   const d = endingCard(g);
   void prepareCard(d, imgLink()).catch(() => {});

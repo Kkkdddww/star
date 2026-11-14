@@ -133,6 +133,8 @@ grant select on team_honors to anon, authenticated;
 create sequence if not exists profile_serial_seq;
 alter table profiles add column if not exists serial bigint;
 alter table profiles add column if not exists nick_changed_at timestamptz;
+-- (v3.2 전부터 '개발자' 같은 이름을 쓰던 프로필이 있어서, 채우는 동안만 닉네임 규칙을 잠깐 빼고 다시 넣어요)
+alter table profiles drop constraint if exists nick_no_staff;
 do $$ begin
   if exists (select 1 from profiles where serial is null) then
     with o as (select id, row_number() over (order by created_at, id) as rn from profiles where serial is null)
@@ -140,6 +142,9 @@ do $$ begin
     perform setval('profile_serial_seq', (select max(serial) from profiles));
   end if;
 end $$;
+alter table profiles add constraint nick_no_staff check (
+  replace(nickname, ' ', '') !~* '(개발자|운영자|운영진|운영팀|관리자|인사과장|동우캉|admin|(^|[^a-z])gm($|[^a-z]))'
+) not valid;
 alter table profiles alter column serial set default nextval('profile_serial_seq');
 
 -- 닉네임 규칙: 새로 정하거나 바꿀 때만 겹침 금지 (띄어쓰기 · 대소문자 무시), 바꾸기는 7일에 한 번
