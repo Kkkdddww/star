@@ -5,7 +5,7 @@ import { ASSIGNMENTS, ORIGIN, RANKS } from '../data/config';
 import { RIBBONS, type Earned } from '../engine/meta';
 import { ro } from '../engine/text';
 import type { Rank } from '../engine/types';
-import { dailyChoiceStats, dailyCount, dailyPlace, dailyRanking, getProfile, getRun, myId, myRuns, nicknameProblem, ranking, recentRuns, saveProfile, today, type RunRow } from '../net/api';
+import { dailyChoiceStats, dailyCount, dailyPlace, dailyRanking, getProfile, getRun, myId, myRuns, nicknameProblem, ranking, recentRuns, seasonRanking, SEASON2_FROM, saveProfile, today, type RunRow } from '../net/api';
 import { CHOICE_BY_ID } from '../data/choices';
 import { deskText } from '../engine/choice';
 import { insignia } from './insignia';
@@ -123,20 +123,25 @@ function podium(list: RunRow[]): string {
 const HQ_ORDER = ['chief', 'commander', 'corps', 'hq_vcs', 'division', 'hq_dcs', 'brigade', 'deputy_div', 'regiment', 'hq_chief', 'battalion', 'corps_staff', 'company', 'platoon'];
 
 function viewRank(): string {
-  const date = today(rk.day);
+  // 명예의 전당: rk.day -1 = 시즌 2 전체, -2 = 시즌 1 전체, 0~6 = 날짜
+  if (rk.tab !== 'top' && rk.day < 0) rk.day = 0;
+  const season = rk.day === -1 ? 2 : rk.day === -2 ? 1 : null;
+  const date = today(Math.max(0, rk.day));
   const tabs = `<div class="seg">${([['daily', '오늘의 기수'], ['top', '명예의 전당'], ['hq', '사령부'], ['mine', '나의 기록']] as const).map(([k, l]) => `<button class="${rk.tab === k ? 'on' : ''}" data-act="rank-tab" data-v="${k}">${l}</button>`).join('')}</div>`;
   let body = '';
   if (rk.tab === 'mine') body = viewMine();
   else {
     const days = Array.from({ length: 7 }, (_, i) => i);
-    const ctrl = `<div class="ctrl"><select data-act="noop" id="rday" aria-label="날짜">${days.map((i) => `<option value="${i}" ${i === rk.day ? 'selected' : ''}>${i === 0 ? '오늘' : i === 1 ? '어제' : `${i}일 전`} ${today(i).slice(5).replace('-', '.')}</option>`).join('')}</select></div>`;
+    const seasonOpts = rk.tab === 'top' ? `<option value="-1" ${rk.day === -1 ? 'selected' : ''}>시즌 2 전체 · ${SEASON2_FROM.slice(5).replace('-', '.')}~</option><option value="-2" ${rk.day === -2 ? 'selected' : ''}>시즌 1 전체 · 보관</option>` : '';
+    const ctrl = `<div class="ctrl"><select data-act="noop" id="rday" aria-label="날짜">${seasonOpts}${days.map((i) => `<option value="${i}" ${i === rk.day ? 'selected' : ''}>${i === 0 ? '오늘' : i === 1 ? '어제' : `${i}일 전`} ${today(i).slice(5).replace('-', '.')}${rk.tab === 'top' && today(i) < SEASON2_FROM ? ' · 시즌 1' : ''}</option>`).join('')}</select></div>`;
     const chips = rk.tab === 'top' ? `<div class="chips filt">${[null, ...Object.keys(ORIGIN)].map((o) => `<button class="fchip ${rk.origin === o ? 'on' : ''}" data-act="rank-origin" data-v="${o ?? ''}">${o ?? '전체'}</button>`).join('')}</div>` : '';
     const st = rk.tab === 'daily' ? load(`rank:daily:${date}`, () => dailyRanking(date, 100))
+      : season ? load(`rank:season${season}:${rk.origin ?? ''}`, () => seasonRanking(season, rk.origin, 100))
       : load(`rank:${date}:${rk.tab === 'hq' ? 'all300' : rk.origin ?? ''}`, () => ranking(date, rk.tab === 'hq' ? null : rk.origin, rk.tab === 'hq' ? 300 : 100));
     let list = '';
     if (st.state === 'loading') list = loadingBox;
     else if (st.state === 'error') list = errorBox(st.msg);
-    else if (!st.data.length) list = `<div class="doc"><div class="bd" style="padding-top:22px"><p class="sub">${rk.day === 0 ? (rk.tab === 'daily' ? '오늘의 기수에서 전역한 사람이 아직 없어요. 첫 번째가 되어 보세요!' : '오늘 전역한 사람이 아직 없어요. 첫 번째가 되어 보세요!') : '이 날은 기록이 없어요.'}</p></div></div>`;
+    else if (!st.data.length) list = `<div class="doc"><div class="bd" style="padding-top:22px"><p class="sub">${rk.day === 0 ? (rk.tab === 'daily' ? '오늘의 기수에서 전역한 사람이 아직 없어요. 첫 번째가 되어 보세요!' : '오늘 전역한 사람이 아직 없어요. 첫 번째가 되어 보세요!') : season ? '이 시즌 기록이 아직 없어요.' : '이 날은 기록이 없어요.'}</p></div></div>`;
     else if (rk.tab === 'hq') {
       const best = new Map<string, RunRow>();
       for (const r of st.data) { const id = ASSIGNMENTS.find((a) => a.name === r.best_billet)?.id; if (id && !best.has(id)) best.set(id, r); }
@@ -147,7 +152,9 @@ function viewRank(): string {
       const box = (part: RunRow[], from: number) => part.length ? `<div class="doc" style="margin:10px 0 0"><div class="bd" style="padding:4px 16px">${part.map((r, i) => rowHtml(r, from + i)).join('')}</div></div>` : '';
       list = podium(st.data) + box(rows.slice(0, 7), 4) + (rows.length > 7 ? adSlot('rank') : '') + box(rows.slice(7), 11);
     }
-    body = `${ctrl}${chips}${list}`;
+    const note = season === 1 ? '<p class="faint" style="margin:4px 4px 10px">시즌 1은 잠재력이 크게 갈리던 시절 기록이에요. 한 사람당 최고 기록 하나만 보여요</p>'
+      : season === 2 ? '<p class="faint" style="margin:4px 4px 10px">시즌 2 전체 기록이에요. 한 사람당 최고 기록 하나만 보여요</p>' : '';
+    body = `${ctrl}${chips}${note}${list}`;
   }
   return `<div class="page">${header('랭킹')}<main class="pad tight" style="padding-top:8px">
     <p class="sub" style="margin:0 4px 12px">${rk.tab === 'daily' ? '같은 날 같은 출발선 · 최종 계급 → 명예 점수 → 복무 기간 짧은 순' : '자유 플레이 · 최종 계급 → 명예 점수 → 복무 기간 짧은 순'}</p>

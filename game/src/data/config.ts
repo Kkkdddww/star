@@ -45,10 +45,10 @@ export const REVIEW_NOISE = 3;
 
 /** 성장 C안: 잠재력별 기본 성장(나이 적용), 종합 능력치 상한. 이벤트 보상은 나이와 무관 */
 export const POTENTIAL: Record<Potential, { min: number; max: number; cap: number; label: string }> = {
-  S: { min: 12, max: 14, cap: 92, label: '타고난 지휘관감. 어느 자리에서든 빠르게 큽니다' },
-  A: { min: 9, max: 11, cap: 84, label: '꾸준히 성장할 재목. 기회를 잡으면 멀리 갑니다' },
-  B: { min: 6, max: 8, cap: 76, label: '성실한 평균형. 경험이 쌓일수록 단단해집니다' },
-  C: { min: 4, max: 6, cap: 70, label: '늦게 피는 꽃. 계기를 만나면 달라질 수 있습니다' },
+  S: { min: 11, max: 13, cap: 90, label: '타고난 지휘관감. 어느 자리에서든 빠르게 큽니다' },
+  A: { min: 9, max: 11, cap: 87, label: '꾸준히 성장할 재목. 기회를 잡으면 멀리 갑니다' },
+  B: { min: 8, max: 10, cap: 84, label: '성실한 평균형. 경험이 쌓일수록 단단해집니다' },
+  C: { min: 7, max: 9, cap: 81, label: '늦게 피는 꽃. 계기를 만나면 달라질 수 있습니다' },
 };
 export function ageFactor(age: number): number {
   if (age < 30) return 1.0;
@@ -56,7 +56,7 @@ export function ageFactor(age: number): number {
   return 0.4;
 }
 export const BRANCH_FIT_MULT = 1.2;
-export const AWAKEN_CHANCE: Record<Potential, number> = { C: 0.3, B: 0.15, A: 0.06, S: 0 };
+export const AWAKEN_CHANCE: Record<Potential, number> = { C: 0.45, B: 0.3, A: 0.15, S: 0 };
 export const AWAKEN_MAX = 2;
 export const AWAKEN_AGE_LIMIT = 45;
 export const FITNESS_DECLINE_AGE = 35;

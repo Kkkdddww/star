@@ -50,6 +50,16 @@ export function makeCandidates(rand: () => number = Math.random): Candidate[] {
   });
 }
 
+/** v3.2 공정한 출발선: 이 날(KST)부터 오늘의 기수 · 우리 기수는 후보 3명 잠재력이 같다 */
+export const FAIR_FROM = '2026-11-15';
+/** 기수 판 잠재력: 평일 A · 토 S · 일 B. 시작 전 날짜면 null(예전처럼 무작위) */
+export function fixedPotential(day: string): Potential | null {
+  if (!day || day < FAIR_FROM) return null;
+  const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
+  return dow === 6 ? 'S' : dow === 0 ? 'B' : 'A';
+}
+export const POT_DAY_LABEL: Record<Potential, string> = { S: '토요일 · 장군이 많이 나오는 날', A: '평일 기본', B: '일요일 · 어려운 날', C: '' };
+
 /** 잠재력 범위: 진짜 등급을 반드시 포함하는 2단계 */
 const ORDER: Potential[] = ['C', 'B', 'A', 'S'];
 export function potentialRange(p: Potential, rand: () => number = Math.random): string {

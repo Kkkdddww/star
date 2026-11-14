@@ -8,7 +8,7 @@ import { advanceYear, careerYear, decide, newGame, retire, rivalOf, setPolicy, s
 import { branchFits, overall } from '../engine/growth';
 import { earnedRibbons, earnedTitles, honorScore, RIBBONS, TITLES, titleName, type Earned } from '../engine/meta';
 import { initAnalytics, track } from '../net/analytics';
-import { baseStats, makeCandidates, potentialRange, type Candidate } from '../engine/candidates';
+import { baseStats, fixedPotential, makeCandidates, POT_DAY_LABEL, potentialRange, type Candidate } from '../engine/candidates';
 import { asg, assignmentsFor, isRequired, lacksRequired, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
 import { RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
@@ -89,7 +89,9 @@ interface Prologue {
   /** 오늘의 기수 날짜 */
   daily?: string;
   /** 우리 기수 */
-  group?: { id: string; code: string; name: string; seed: number };
+  group?: { id: string; code: string; name: string; seed: number; day?: string };
+  /** v3.2 기수 판: 후보 3명 모두 같은 잠재력 (평일 A · 토 S · 일 B) */
+  fixedPot?: Potential | null;
 }
 const REROLL_MAX = 2;
 
@@ -155,8 +157,11 @@ function docNo(g: GameState, suffix: string) { return `제${g.year}-${String(car
 function newPrologue(daily?: string, group?: Prologue['group']): Prologue {
   const r = daily ? keyRng('malttuk-daily', daily) : group ? keyRng('malttuk-cohort', group.seed) : null;
   const rand = r ? () => r.next() : Math.random;
+  const cands = makeCandidates(rand);
+  const fixedPot = daily ? fixedPotential(daily) : group?.day ? fixedPotential(group.day) : null;
+  if (fixedPot) for (const c of cands) c.potential = fixedPot;
   return { name: '', origin: '학군', potential: 'B', seed: 0, focus: [], branch: '전투', open: false, chosen: false, grad: null,
-    cands: makeCandidates(rand), pick: null, rerolls: 0, viewed: false, ranges: null, spread: {}, range: null, daily, group };
+    cands, pick: null, rerolls: 0, viewed: false, ranges: null, spread: {}, range: null, daily, group, fixedPot };
 }
 const fixedWorld = (p: Prologue) => !!(p.daily || p.group);
 
@@ -170,7 +175,7 @@ function viewCands(): string {
     const hi = sorted.slice(0, 2), lo = sorted[5];
     const range = p.ranges?.[i];
     return `<button class="cand ${on ? 'on' : ''}" data-act="p-cand" data-v="${i}">
-      <div class="r"><span class="chip">${ORIGIN_SCHOOL[c.origin].school}</span><b>후보 ${i + 1}</b><span class="pot ${range ? (range.endsWith('S') ? 'hot' : 'op') : ''}">${range ?? '잠재력 ?'}</span></div>
+      <div class="r"><span class="chip">${ORIGIN_SCHOOL[c.origin].school}</span><b>후보 ${i + 1}</b>${p.fixedPot ? `<span class="pot op">잠재력 ${p.fixedPot}</span>` : `<span class="pot ${range ? (range.endsWith('S') ? 'hot' : 'op') : ''}">${range ?? '잠재력 ?'}</span>`}</div>
       <p class="nick">"${c.nick}"</p>
       <p class="str">${STAT_LABEL[hi[0]]}, ${STAT_LABEL[hi[1]]}${hasJong(STAT_LABEL[hi[1]]) ? '이' : '가'} 높고, ${STAT_LABEL[lo]}${hasJong(STAT_LABEL[lo]) ? '이' : '가'} 가장 낮아요</p>
       ${on ? `<div class="cbars">${STAT_KEYS.map((k) => `<span class="${hi.includes(k) ? 'hi' : ''}">${STAT_LABEL[k]}</span><i><u style="width:${st[k]}%"></u></i><em>${st[k]}</em>`).join('')}</div>
@@ -183,7 +188,7 @@ function viewCands(): string {
     <div class="pad tight" style="padding-bottom:170px">
     <p class="kicker">${p.daily ? `오늘의 기수 · ${dayLabel(p.daily)}` : p.group ? `우리 기수 · ${esc(p.group.name)}` : '지원서'} · ${esc(p.name.trim() || '지원자')}</p>
     <h1 class="h1">어떤 장교로<br>시작할까요?</h1>
-    <p class="sub">${p.daily ? '오늘 입대한 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : p.group ? '이 기수 동기 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : '세 후보는 능력치 총합이 같아요. 출신과 분포만 달라요.'} 잠재력은 졸업할 때 교관 평가서로 확인할 수 있어요.</p>
+    <p class="sub">${p.daily ? '오늘 입대한 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : p.group ? '이 기수 동기 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : '세 후보는 능력치 총합이 같아요. 출신과 분포만 달라요.'} ${p.fixedPot ? `이번 기수는 세 후보 모두 잠재력 ${p.fixedPot}예요. 선택으로 겨뤄요.` : '잠재력은 졸업할 때 교관 평가서로 확인할 수 있어요.'}</p>
     ${p.cands.map(card).join('')}
     ${fixedWorld(p) ? '' : `<div class="ctools one">
       <button class="ctool" data-act="p-reroll" ${left > 0 ? '' : 'disabled'}><b>${icon('swap', 16)} 후보 다시 뽑기</b><span class="${left > 0 ? 'free' : ''}">${ui.adBusy ? '광고 불러오는 중…' : left > 0 ? `${rewardedOn() ? '광고 보고' : '무료'} · ${left}회 남음` : '이번 판 다 썼어요'}</span></button>
@@ -245,7 +250,7 @@ function viewLobby(): string {
   const track = `<div class="steps"><div class="fillbar" style="width:calc((100% - 28px) * ${Math.max(0, cur) / (STEPS.length - 1)})"></div>${STEPS.map(([l, i], k) => `<div class="st ${best >= i ? 'on' : ''} ${k === cur ? 'cur' : ''}"><i></i><span>${l}</span></div>`).join('')}</div>`;
   const d = dailyState(), c = groupState();
   const dg = d.save?.game;
-  const dailySub = d.st === 'playing' ? `진행 중 · ${dg!.me.rank} ${esc(dg!.me.name)}` : d.st === 'ended' ? '전역했어요 · 결과를 올려 주세요' : d.st === 'uploaded' ? `${dg!.me.rank} 전역 · 내일 새 기수가 열려요` : '모두 같은 출발선';
+  const dailySub = d.st === 'playing' ? `진행 중 · ${dg!.me.rank} ${esc(dg!.me.name)}` : d.st === 'ended' ? '전역했어요 · 결과를 올려 주세요' : d.st === 'uploaded' ? `${dg!.me.rank} 전역 · 내일 새 기수가 열려요` : (() => { const fp = fixedPotential(today()); return fp ? `오늘은 ${fp} 기수 · ${POT_DAY_LABEL[fp]}` : '모두 같은 출발선'; })();
   const cg = c.save?.game;
   const groupSub = c.st === 'playing' ? `진행 중 · ${esc(cg!.group!.name)}` : c.st === 'ended' ? `${esc(cg!.group!.name)} · 결과를 올려 주세요` : '친구와 같은 출발선 · 7일 동안';
   const freeSub = live ? `진행 중 · ${live.me.rank} ${esc(live.me.name)} · ${live.year}년` : '연습 · 약장 모으기 · 다시 뽑기 2회';
@@ -365,7 +370,8 @@ function viewGrad(): string {
     <p class="sec">라이벌</p>
     <div class="rival"><div class="vs">VS</div><div><b>${esc(rivalName.name)}</b><p class="sub small">${rivalName.line} · 석차가 가장 비슷했던 동기예요</p></div></div>
     <p class="sec">교관 평가서</p>
-    ${p.range ? `<div class="doc" style="margin:0"><div class="bd"><div class="kv"><span>잠재력 범위</span><b class="olive">${p.range}</b></div><p class="faint" style="margin-top:8px">범위는 진짜 등급을 반드시 포함해요. 범위를 봐도 잠재력은 바뀌지 않아요.</p></div></div>`
+    ${p.fixedPot ? `<div class="doc" style="margin:0"><div class="bd"><div class="kv"><span>잠재력</span><b class="olive">${p.fixedPot}등급</b></div><p class="faint" style="margin-top:8px">이번 기수 동기는 모두 잠재력 ${p.fixedPot}예요. 순위는 선택으로 갈려요.</p></div></div>`
+      : p.range ? `<div class="doc" style="margin:0"><div class="bd"><div class="kv"><span>잠재력 범위</span><b class="olive">${p.range}</b></div><p class="faint" style="margin-top:8px">범위는 진짜 등급을 반드시 포함해요. 범위를 봐도 잠재력은 바뀌지 않아요.</p></div></div>`
       : `<button class="row" data-act="p-view"><div class="mark gray">${icon('file')}</div><div class="g"><b>교관 평가서 열어 보기</b><span>${ui.adBusy ? '광고 불러오는 중…' : `잠재력 범위를 확인해요 · ${rewardedOn() ? '광고 보고' : '무료'} 1회`}</span></div>${icon('chev')}</button>`}
   </div>
   <div class="bar"><button class="btn" data-act="p-commission">임관하기</button></div></div>`;
@@ -1139,6 +1145,7 @@ function viewEnding(g: GameState): string {
     ${group && save!.runId ? `<a class="newnote" style="margin:0 0 12px" href="#/c/${g.group!.code}"><span class="nb">순위</span><span><b>${esc(g.group!.name)} 순위 보기</b><span>동기들과의 갈림길, 기수 시상</span></span>${icon('chev')}</a>` : ''}
     ${uploadBox()}
     ${dailyBox}
+    ${daily && save!.runId ? dailyNext() : ''}
     ${hs ? `<p class="sec">명예 점수 ${hs.total}</p><div class="doc" style="margin:0"><div class="bd" style="padding-top:16px">${hs.parts.map((x) => `<div class="kv"><span>${x.label}</span><b>${x.v > 0 ? '+' : ''}${x.v}</b></div>`).join('')}<p class="faint" style="margin-top:6px">같은 계급이면 명예 점수가 높은 사람이 앞서요</p></div></div>` : ''}
     <div style="height:12px"></div>
     ${cardHtml(d, '<button class="share" data-act="share">나는 몇 성까지 갈 수 있을까? <small>[카드 공유]</small></button><button class="share alt" style="margin-top:8px" data-act="save-img">이미지로 저장</button><button class="link" style="margin:6px auto 0;display:block;font-size:13px" data-act="copy-link">링크만 복사</button>')}
@@ -1155,6 +1162,16 @@ function viewEnding(g: GameState): string {
   ${save!.runId
     ? `<div class="bar"><div class="two"><button class="btn line" data-act="go-dex">약장 도감</button><button class="btn" data-act="new-game">${daily || group ? '로비로' : '새 인생 시작'}</button></div></div>`
     : `<div class="bar"><button class="btn" data-act="upload" ${ui.upload.busy ? 'disabled' : ''}>${ui.upload.busy ? '올리는 중이에요…' : '랭킹에 올리기'}</button>${ui.upload.fails >= 2 ? '<button class="link" style="margin-top:2px;padding:8px" data-act="new-game">서버 문제로 지금은 건너뛰기</button>' : '<p class="faint" style="text-align:center;margin-top:8px">랭킹에 올려야 새 인생을 시작할 수 있어요</p>'}</div>`}</div>`;
+}
+
+/** v3.2 오늘의 기수 전역 뒤 다음 행동 두 개 */
+function dailyNext(): string {
+  const free = peek('free')?.game;
+  const live = free && !free.ended;
+  return `<p class="sec">다음은</p><div class="doc" style="margin:0"><div class="bd">
+    <button class="row" data-act="${live ? 'continue' : 'start-new'}"><div class="mark gray">${icon('swap')}</div><div class="g"><b>${live ? '자유 플레이 이어서 하기' : '자유 플레이로 한 판 더'}</b><span>${live ? `${free!.me.rank} ${esc(free!.me.name)} · ${free!.year}년` : '다시 뽑기 2회 · 약장 모으기'}</span></div>${icon('chev')}</button>
+    <button class="row" data-act="route-cohort"><div class="mark gray">${icon('people')}</div><div class="g"><b>친구랑 우리 기수 만들기</b><span>같은 후보·같은 동기로 7일 동안 겨뤄요</span></div>${icon('chev')}</button>
+  </div></div>`;
 }
 
 async function upload(g: GameState) {
@@ -1437,7 +1454,7 @@ root.addEventListener('click', (e) => {
       useSlot('cohort'); leaveRoute();
       if (cur.st === 'playing' || cur.st === 'ended') { go(save!.game.ended ? 'ending' : 'home'); break; }
       rememberCohort(c.code, c.name);
-      save = null; ui.pro = newPrologue(undefined, { id: c.id, code: c.code, name: c.name, seed: c.seed });
+      save = null; ui.pro = newPrologue(undefined, { id: c.id, code: c.code, name: c.name, seed: c.seed, day: today(0, c.created_at) });
       track('cohort_join'); go('p-intro'); break;
     }
     case 'grp-create': {
@@ -1492,7 +1509,7 @@ root.addEventListener('click', (e) => {
       if (!p) break;
       const game = startGame();
       const focus: [StatKey, StatKey] = p.focus.includes('리더십') ? ['command', 'tactics'] : p.focus.includes('학업') ? ['expertise', 'admin'] : ['command', 'social'];
-      save = { game, focus, potentialSeen: p.range, metaApplied: false, log: [], runId: null };
+      save = { game, focus, potentialSeen: p.fixedPot ?? p.range, metaApplied: false, log: [], runId: null };
       ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0 };
       persist();
       go('p-commission');
