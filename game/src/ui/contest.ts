@@ -1,9 +1,10 @@
 // v3.3 기수 대항전 화면: 대항전(#/contest), 기수 만들기(#/contest/new), 대항전 기수 페이지(#/c/코드), 표창장(#/award/코드/주)
 // 로비의 대항전 문서, 전역 화면의 팀 반영, 랭킹 닉네임 옆 약장도 여기서 만든다
-import { CONTEST_FROM, contestOpen, daysLeftInWeek, MAX_TEAMS, personScore, teamScore, weekEnd, weekNo, weekOf, prevWeek } from '../engine/contest';
+import { CONTEST_FROM, contestOpen, crowdBonus, daysLeftInWeek, MAX_TEAMS, personScore, teamScore, weekEnd, weekNo, weekOf, prevWeek } from '../engine/contest';
 import type { Rank } from '../engine/types';
+import { hobongOf } from '../engine/hobong';
 import {
-  contestBoard, getProfile, memberCounts, myId, myTeams, nicknames, publicTeams, teamHonors, teamMembers, teamPlaces, teamTags, today, weekRuns,
+  contestBoard, contestTotals, getProfile, xpOf, memberCounts, myId, myTeams, nicknames, publicTeams, teamHonors, teamMembers, teamPlaces, teamTags, today, weekRuns,
   type BoardRow, type CohortRow, type Honors, type MyTeam, type RunRow,
 } from '../net/api';
 import { awards } from './group';
@@ -20,6 +21,9 @@ export const cs = { name: '', motto: '', ribbon: [0, 0, 1] as number[], pub: tru
 
 /** 이번 회차 월요일. 첫 회차 전이면 첫 회차 */
 export const curWeek = () => (contestOpen(today()) ? weekOf(today()) : CONTEST_FROM);
+/** 시작 전: 지금까지 모인 기수 · 사람 */
+const totalsL = () => load('contest:totals', contestTotals);
+const totalsText = () => { const t = totalsL(); return t.state === 'ok' ? `${t.data.teams}개 기수 · ${t.data.people}명` : null; };
 const dLeft = () => (contestOpen(today()) ? daysLeftInWeek(today()) : null);
 const docNo = (week: string) => `제${week.slice(0, 4)}-${weekNo(week)}호`;
 
@@ -52,7 +56,7 @@ const scoreCell = (score: number | string, sub = '') => `<span class="tsc"><b>${
 
 // ── 로비: 타일 한 줄 · 대항전 문서 ──
 export function contestTileSub(): string {
-  if (!contestOpen(today())) return `<span class="todo">${md(CONTEST_FROM)} 시작</span>`;
+  if (!contestOpen(today())) { const t = totalsL(); return t.state === 'ok' && t.data.teams ? `<span class="todo">${t.data.teams}개 기수</span> · ${md(CONTEST_FROM)}` : `<span class="todo">${md(CONTEST_FROM)} 시작</span>`; }
   const mine = myTeamsNow();
   const left = `D-${dLeft()}`;
   if (!mine?.length) return `기수 없음 · ${left}`;
@@ -71,7 +75,7 @@ export function contestDoc(play: { label: string; act: string }): string {
   const head = `<div class="hd">
     <div class="dn">주간 공문 · ${docNo(week)} · ${md(week)}~${md(weekEnd(week))}${open ? ` · <b>D-${dLeft()}</b>` : ''}</div>
     <div class="tt">기수 대항전<em>${open ? `${rows.length}개 기수` : `첫 회차 ${md(CONTEST_FROM)}(월)`}</em></div>
-    ${mine?.length ? '' : '<p class="ds">팀으로 겨루는 한 주 · 못하는 친구를 불러도 점수가 깎이지 않아요</p>'}
+    ${!open && totalsText() ? `<p class="ds">지금까지 <b class="olive">${totalsText()}</b>이 모였어요</p>` : mine?.length ? '' : '<p class="ds">팀으로 겨루는 한 주 · 동기 전원 평균 + 10명마다 +5</p>'}
   </div>`;
   let body = '';
   if (mine?.length) {
@@ -86,12 +90,15 @@ export function contestDoc(play: { label: string; act: string }): string {
     body += `<div class="lk"><span>이번 주 순위</span><a href="#/contest">전체 ›</a></div>`;
     body += rows.slice(0, 3).map((r, i) => teamRow({ n: r.place ?? i + 1, ribbon: r.ribbon, name: r.name, sub: `${r.no ?? '-'}기 · 전역 ${r.n}명`, right: scoreCell(r.score), href: `#/c/${r.code}`, hon: honorOf(ids, r.cohort_id), w: 36 })).join('');
   } else if (open) body += `<p class="sub" style="margin-top:8px">아직 순위에 오른 기수가 없어요. 전역 2명이면 순위에 올라요.</p>`;
-  else if (!mine?.length) body += `<p class="sub" style="margin-top:4px">${md(CONTEST_FROM)}(월)부터 매주 열려요. 지금 기수를 만들어 동기를 모아 두세요.</p>`;
+  else if (!mine?.length) body += `<p class="sub" style="margin-top:4px">${md(CONTEST_FROM)}(월) 0시부터 매주 열려요. 지금 기수를 만들거나 들어가 두세요.</p>`;
   const btns = mine?.length
     ? `<div class="two"><button class="btn line" data-act="grp-share" data-v="${mine[0].cohorts.code}">동기 부르기</button><button class="btn" data-act="${play.act}" ${open ? '' : 'disabled'}>${open ? play.label : `${md(CONTEST_FROM)}부터 출전`}</button></div>`
     : `<div class="two"><button class="btn line" data-act="team-new">기수 만들기</button><button class="btn" data-act="team-random">아무 기수나 들어가기</button></div>`;
-  return `<section class="doc lcard">${head}<div class="bd">${body}${btns}
-    <p class="lmore"><a href="#/contest">대항전 전체</a><a href="#/cohort">친선 기수 (7일 한 판)</a></p></div></section>`;
+  const pubN = load('contest:public', async () => { const ts = await publicTeams(); return { ts, cnt: await memberCounts(ts.map((t) => t.id)) }; });
+  const pubCount = pubN.state === 'ok' ? pubN.data.ts.filter((t) => (pubN.data.cnt[t.id] ?? 0) < t.max_members).length : null;
+  const go = `<a class="golink" href="#/contest"><span class="g"><b>대항전 전체 보기</b><span>전체 순위 · ${pubCount ? `공개 기수 ${pubCount}곳` : '공개 기수'} · 지난주 표창 · 포상 규칙</span></span>${chev}</a>`;
+  return `<section class="doc lcard">${head}<div class="bd">${body}${go}${btns}
+    <p class="lmore"><a href="#/cohort">친선 기수 (7일 한 판) ›</a></p></div></section>`;
 }
 
 // ── 전역 화면: 팀 반영 ──
@@ -123,8 +130,8 @@ export function viewContest(): string {
     <div class="tt">제${weekNo(week)}주 기수 대항전<em>${open ? `D-${dLeft()}` : `${md(CONTEST_FROM)} 시작`}</em></div>
     <p class="ds">${md(week)}(월) ~ ${md(weekEnd(week))}(일) 24시 · 모든 기수가 같은 세상, 난이도 보통 · 한 사람 한 주 한 판</p>
   </div><div class="bd">
-    <div class="kv"><span>참가</span><b>${rows.length}개 기수 · ${rows.reduce((a, r) => a + r.n, 0)}명</b></div>
-    <div class="kv"><span>팀 점수</span><b>상위 3명 평균 + 4번째부터 +5</b></div>
+    <div class="kv"><span>${open ? '참가' : '지금까지 모임'}</span><b>${open ? `${rows.length}개 기수 · ${rows.reduce((a, r) => a + r.n, 0)}명` : totalsText() ?? '불러오는 중…'}</b></div>
+    <div class="kv"><span>팀 점수</span><b>전역한 동기 전원 평균 + 10명마다 +5</b></div>
     <div class="kv"><span>포상</span><b>1~3위 표창장 · 약장에 별</b></div>
   </div></section>`;
 
@@ -162,7 +169,7 @@ export function viewContest(): string {
 export function viewTeamForm(): string {
   const [b, p, c] = cs.ribbon;
   const sw = (arr: string[], on: number, act: string) => `<div class="sw">${arr.map((col, i) => `<button class="${i === on ? 'on' : ''}" style="background:${col}" data-act="${act}" data-v="${i}" aria-label="${i + 1}번"></button>`).join('')}</div>`;
-  return `<div class="page">${header(cs.edit ? '기수 고치기' : '새 기수 만들기')}<main class="pg">
+  return `<div class="page">${header(cs.edit ? '기수 고치기' : '새 기수 만들기', '', 'go-back')}<main class="pg">
   <section class="doc" style="margin-top:4px"><div class="thead">${teamRibbon(cs.ribbon, 190)}<p class="tmeta">${cs.edit ? '기수 번호는 그대로예요' : '기수 번호는 만들 때 정해져요'}</p><p class="tnm">${esc(cs.name.trim() || '기수 이름')}</p>${cs.motto.trim() ? `<p class="tmt">"${esc(cs.motto.trim())}"</p>` : ''}</div>
   <div class="bd" style="padding-top:0">
     <p class="lbl">기수 이름</p><input id="tname" class="inp" style="background:var(--bg);height:48px" maxlength="16" placeholder="예: 임관 동기 모임" value="${esc(cs.name)}">
@@ -202,7 +209,6 @@ export function viewTeam(c: CohortRow): string {
   const myCount = myTeamsNow()?.length ?? 0;
 
   const pts = wr.map((r) => ({ r, p: personScore(r.rank_index, r.honor) })).sort((x, y) => y.p - x.p);
-  const top = pts.slice(0, 3), extra = pts.slice(3);
   const done = new Set(wr.map((r) => r.user_id));
   const notYet = members.filter((m) => !done.has(m.user_id));
   const score = pts.length ? teamScore(pts.map((x) => x.p)) : null;
@@ -223,12 +229,11 @@ export function viewTeam(c: CohortRow): string {
     <div class="bigrk">${place ? `<b>${place.place}위</b>` : `<b class="sm">${open ? '순위 전' : '출전 대기'}</b>`}${place?.gap !== null && place?.gap !== undefined ? `<span class="sub">3위까지 ${place.gap}점</span>` : ''}</div>
   </div><div class="bd">
     ${score !== null ? `<div class="kv"><span>팀 점수</span><b>${score}</b></div>
-    <div class="kv"><span>상위 ${top.length}명 평균</span><b>${Math.round(top.reduce((a, x) => a + x.p, 0) / top.length)}</b></div>
-    <div class="kv"><span>인원 보너스</span><b>${extra.length ? `+${Math.min(50, extra.length * 5)}` : '4번째 동기부터 +5'}</b></div>
-    <div class="lk"><span>점수에 들어간 ${top.length}명</span></div>${top.map((x) => who(x, String(x.p))).join('')}
-    ${extra.length ? `<div class="lk"><span>인원 +5를 보탠 동기</span></div>${extra.map((x) => who(x, '+5')).join('')}` : ''}`
+    <div class="kv"><span>전원 ${pts.length}명 평균</span><b>${Math.round(pts.reduce((a, x) => a + x.p, 0) / pts.length)}</b></div>
+    <div class="kv"><span>인원 보너스</span><b>${crowdBonus(pts.length) ? `+${crowdBonus(pts.length)}` : '0'} <span class="faint">${10 - (pts.length % 10)}명 더 전역하면 +5</span></b></div>
+    <div class="lk"><span>이번 주 전역한 동기 ${pts.length}명</span></div>${pts.map((x) => who(x, String(x.p))).join('')}`
     : `<p class="sub">${open ? '이번 주 전역한 동기가 아직 없어요. 전역 2명부터 순위에 올라요.' : `${md(CONTEST_FROM)}(월)부터 한 주에 한 판씩 출전해요.`}</p>`}
-    ${notYet.length && members.length ? `<div class="lk"><span>아직 안 한 동기 ${notYet.length}명</span></div><p class="sub">${notYet.slice(0, 8).map((m) => esc(nm(m.user_id))).join(' · ')}${notYet.length > 8 ? ` 외 ${notYet.length - 8}명` : ''}${pts.length >= 3 && pts.length < 13 ? ' — 한 명 더 하면 +5예요' : ''}</p>
+    ${notYet.length && members.length ? `<div class="lk"><span>아직 안 한 동기 ${notYet.length}명</span></div><p class="sub">${notYet.slice(0, 8).map((m) => esc(nm(m.user_id))).join(' · ')}${notYet.length > 8 ? ` 외 ${notYet.length - 8}명` : ''}${(pts.length + 1) % 10 === 0 ? ' — 한 명 더 하면 +5예요' : ''}</p>
     <button class="btn line" style="height:44px;margin-top:10px" data-act="grp-share" data-v="${c.code}">동기 부르기</button>` : ''}
   </div></section>`;
 
@@ -251,12 +256,12 @@ export function viewTeam(c: CohortRow): string {
     : members.length >= c.max_members ? '<button class="btn" disabled>정원 30명이 다 찼어요</button>'
     : myCount >= MAX_TEAMS ? `<button class="btn" disabled>기수는 ${MAX_TEAMS}곳까지 들어갈 수 있어요</button>`
     : `<div class="two"><button class="btn line" data-act="grp-share" data-v="${c.code}">공유</button><button class="btn" data-act="team-join" data-v="${c.id}">이 기수 들어가기</button></div>`;
-  return `<div class="page">${header('기수')}<main class="pg">${headDoc}${weekDoc}${awardBox}${roster}${history}${mine}</main><div class="bar">${bar}</div></div>`;
+  return `<div class="page">${header('기수', '', 'go-back')}<main class="pg">${headDoc}${weekDoc}${awardBox}${roster}${history}${mine}</main><div class="bar">${bar}</div></div>`;
 }
 
 // ── 표창장 ──
 export function viewAward(code: string, week: string, c: CohortRow | null): string {
-  if (!c) return `<div class="page">${header('표창장')}<main class="pad tight">${loadingBox}</main></div>`;
+  if (!c) return `<div class="page">${header('표창장', '', 'go-back')}<main class="pad tight">${loadingBox}</main></div>`;
   const hist = load(`contest:hist:${c.id}`, () => teamPlaces(c.id));
   const h = hist.state === 'ok' ? hist.data.find((x) => x.week === week) : null;
   const fin = week < weekOf(today());
@@ -275,12 +280,13 @@ export function viewAward(code: string, week: string, c: CohortRow | null): stri
       <div class="sign">말뚝 인사과장 <span class="stamp"><b>인사</b><i>과장</i></span></div>
     </div>`;
   }
-  return `<div class="page">${header('표창장')}<main class="pad tight" style="padding-top:8px">${body}</main>
+  return `<div class="page">${header('표창장', '', 'go-back')}<main class="pad tight" style="padding-top:8px">${body}</main>
     <div class="bar"><div class="two"><button class="btn line" data-act="copy-award">링크 복사</button><a class="btn" href="#/c/${code}" style="display:flex;align-items:center;justify-content:center;text-decoration:none">기수 페이지</a></div></div></div>`;
 }
 
 // ── 랭킹 줄: 지금 닉네임 + 닉네임 옆 약장 (대표 기수) ──
-type Person = { nick: string | null; tag: { ribbon: number[] | null; no: number | null; name: string; cohort: string } | null };
+const RANK_HOBONG = false;
+type Person = { nick: string | null; tag: { ribbon: number[] | null; no: number | null; name: string; cohort: string } | null; hb?: number };
 const people = new Map<string, Person | undefined>();
 const honorCache = new Map<string, Honors | null>();
 let queue = new Set<string>();
@@ -291,6 +297,8 @@ function flush() {
   void teamTags(ids).then(async (rows) => {
     for (const id of ids) people.set(id, { nick: null, tag: null });
     for (const r of rows) people.set(r.id, { nick: r.nickname, tag: r.cohorts && r.main_cohort ? { ...r.cohorts, cohort: r.main_cohort } : null });
+    // 랭킹 호봉: 서버 부담 때문에 잠시 끔 (profiles에 저장된 호봉 칸이 생기면 다시 켬)
+    if (RANK_HOBONG) { const xs = await xpOf(ids).catch(() => [] as { user_id: string; xp: number }[]); for (const x of xs) { const pp = people.get(x.user_id); if (pp) pp.hb = hobongOf(x.xp).level; } }
     const cids = [...new Set(rows.map((r) => r.main_cohort).filter((x): x is string => !!x && !honorCache.has(x)))];
     if (cids.length) { const hs = await teamHonors(cids).catch(() => [] as Honors[]); for (const c of cids) honorCache.set(c, hs.find((h) => h.cohort_id === c) ?? null); }
     refresh();
@@ -310,6 +318,11 @@ export const nameOf = (userId: string, fallback: string) => person(userId)?.nick
 export function teamTag(userId: string): string {
   const t = person(userId)?.tag;
   return t ? `<span class="ttag">${teamRibbon(t.ribbon, 22, honorCache.get(t.cohort) ?? null, `${t.no ?? ''}기 ${t.name}`)}</span>` : '';
+}
+/** 닉네임 옆 호봉 (불러오기 전에는 빈 문자열) */
+export function hobongTag(userId: string): string {
+  const h = person(userId)?.hb;
+  return h ? `<span class="hbt">${h}호봉</span>` : '';
 }
 /** 닉네임을 바꾼 뒤 다시 불러오기 */
 export function forgetPeople() { people.clear(); }

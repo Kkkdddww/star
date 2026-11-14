@@ -41,6 +41,16 @@ export async function session(): Promise<Session> {
 }
 export const myId = () => loadSession()?.user_id ?? null;
 
+/** 서버 부담 줄이기: 자주 부르는 조회는 이 기기에 잠깐 보관해 두고 다시 쓴다 (ttl ms) */
+export async function stash<T>(key: string, ttl: number, fn: () => Promise<T>): Promise<T> {
+  const k = `malttuk-cache:${key}`;
+  try { const c = JSON.parse(localStorage.getItem(k) ?? 'null'); if (c && Date.now() - c.t < ttl) return c.v as T; } catch { /* 무시 */ }
+  const v = await fn();
+  try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), v })); } catch { /* 무시 */ }
+  return v;
+}
+export function unstash(prefix: string) { try { for (const k of Object.keys(localStorage)) if (k.startsWith(`malttuk-cache:${prefix}`)) localStorage.removeItem(k); } catch { /* 무시 */ } }
+
 // ── v3.3 로그인: 지금 익명 계정에 구글 · 카카오 연결 ──
 export type Provider = 'google' | 'kakao';
 export const PROVIDER_NAME: Record<Provider, string> = { google: '구글', kakao: '카카오' };
@@ -190,7 +200,8 @@ export const myRuns = async () => {
 const DLIST = `${LIST},day`;
 const DORDER = 'order=rank_index.desc,honor.desc.nullslast,years.asc,created_at.asc';
 export const dailyRanking = (day: string, limit = 100) => rest<RunRow[]>(`runs?select=${DLIST}&mode=eq.daily&day=eq.${day}&${DORDER}&limit=${limit}`);
-export async function dailyCount(day: string): Promise<number> {
+export const dailyCount = (day: string) => stash(`dcount:${day}`, 2 * 60_000, () => dailyCountRaw(day));
+async function dailyCountRaw(day: string): Promise<number> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/runs?select=id&mode=eq.daily&day=eq.${day}&limit=1`, { headers: { apikey: SUPABASE_KEY, Prefer: 'count=exact' } });
   if (!res.ok) throw new Error(`서버 오류 ${res.status}`);
   return Number(res.headers.get('content-range')?.split('/')[1] ?? 0) || 0;
@@ -271,6 +282,17 @@ export const teamHistory = (cohortId: string) => rest<BoardRow[]>(`contest_board
 export const teamPlaces = (cohortId: string) => rest<BoardRow[]>(`contest_results?cohort_id=eq.${cohortId}&select=*&order=week.desc&limit=60`);
 export interface Honors { cohort_id: string; weeks: number; podiums: number; wins: number }
 export const teamHonors = async (ids: string[]): Promise<Honors[]> => (ids.length ? rest<Honors[]>(`team_honors?cohort_id=in.(${ids.join(',')})&select=*`) : []);
+/** 지금까지 모인 대항전 기수 수 · 기수원 수 (시작 전 표시용) */
+export const contestTotals = () => stash('totals', 5 * 60_000, contestTotalsRaw);
+async function contestTotalsRaw(): Promise<{ teams: number; people: number }> {
+  const cnt = async (path: string) => {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { apikey: SUPABASE_KEY, Prefer: 'count=exact' } });
+    if (!res.ok) throw new Error(`서버 오류 ${res.status}`);
+    return Number(res.headers.get('content-range')?.split('/')[1] ?? 0);
+  };
+  const [teams, people] = await Promise.all([cnt('cohorts?select=id&kind=eq.contest&limit=1'), cnt('members?select=user_id&limit=1')]);
+  return { teams, people };
+}
 export const publicTeams = () => rest<CohortRow[]>(`cohorts?kind=eq.contest&public=eq.true&select=*&order=created_at.desc&limit=40`);
 /** 그 주 대항전 판 (기수원들) */
 export const weekRuns = (week: string, userIds: string[]) => (userIds.length ? rest<RunRow[]>(`runs?select=${LIST}&mode=eq.contest&week=eq.${week}&user_id=in.(${userIds.join(',')})&${DORDER}&limit=60`) : Promise.resolve([] as RunRow[]));
@@ -288,12 +310,16 @@ export const teamTags = async (ids: string[]): Promise<TeamTag[]> => {
   try { return await rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname,main_cohort,cohorts(ribbon,no,name)`); }
   catch { return rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname`); }
 };
+/** 랭킹 줄 호봉: 여러 사람의 경험치 */
+export const xpOf = async (ids: string[]): Promise<{ user_id: string; xp: number }[]> => (ids.length ? rest<{ user_id: string; xp: number }[]>(`profile_stats?user_id=in.(${ids.join(',')})&select=user_id,xp`) : []);
 export const setMainTeam = async (cohortId: string | null) => rest(`profiles?id=eq.${(await session()).user_id}`, { method: 'PATCH', body: JSON.stringify({ main_cohort: cohortId }) }, true);
 
 // ── v3.3 인사기록카드 ──
 export interface Stats { user_id: string; runs: number; generals: number; fourstars: number; best_rank: number; best_free: number | null; daily_days: number; contest_weeks: number; xp: number }
 export const profileOf = async (id: string) => (await rest<Profile[]>(`profiles?id=eq.${id}&select=*`))[0] ?? null;
 export const statsOf = async (id: string) => (await rest<Stats[]>(`profile_stats?user_id=eq.${id}&select=*`))[0] ?? null;
+/** 로비 · 전역 화면용: 내 호봉은 10분 동안 보관 (업로드하면 지움) */
+export const myStatsCached = (id: string) => stash(`stats:${id}`, 10 * 60_000, () => statsOf(id));
 export const dailyBest = async (id: string) => (await rest<{ day: string; place: number; total: number }[]>(`daily_places?user_id=eq.${id}&select=day,place,total&order=place.asc,day.desc&limit=1`))[0] ?? null;
 export const teamsOf = (id: string) => rest<MyTeam[]>(`members?user_id=eq.${id}&select=cohort_id,user_id,seq,joined_at,cohorts(*)&order=joined_at.asc`);
 export const runsOf = (id: string, limit = 5) => rest<RunRow[]>(`runs?select=${LIST}&user_id=eq.${id}&order=created_at.desc&limit=${limit}`);

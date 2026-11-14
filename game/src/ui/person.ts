@@ -21,7 +21,7 @@ function bestRibbons(rows: { ribbons: { id: string; t: number }[] }[]) {
 export function viewPerson(idArg: string): string {
   const me = myId();
   const id = idArg === 'me' ? me : idArg;
-  if (!id) return `<div class="page">${header('인사기록카드')}<main class="pad tight">${errorBox('아직 기록이 없어요. 한 판 끝내고 랭킹에 올리면 카드가 생겨요')}</main></div>`;
+  if (!id) return `<div class="page">${header('인사기록카드', '', 'go-back')}<main class="pad tight">${errorBox('아직 기록이 없어요. 한 판 끝내고 랭킹에 올리면 카드가 생겨요')}</main></div>`;
   const own = id === me;
   const prof = load(`person:${id}`, () => profileOf(id));
   const stats = load(`person:stats:${id}`, () => statsOf(id).catch(() => null));
@@ -29,10 +29,10 @@ export function viewPerson(idArg: string): string {
   const best = load(`person:daily:${id}`, () => dailyBest(id).catch(() => null));
   const teams = load(`person:teams:${id}`, () => teamsOf(id).catch(() => []));
   const ribs = load(`person:ribs:${id}`, () => ribbonsOf(id));
-  if (prof.state === 'loading') return `<div class="page">${header('인사기록카드')}<main class="pad tight">${loadingBox}</main></div>`;
-  if (prof.state === 'error') return `<div class="page">${header('인사기록카드')}<main class="pad tight">${errorBox(prof.msg)}</main></div>`;
+  if (prof.state === 'loading') return `<div class="page">${header('인사기록카드', '', 'go-back')}<main class="pad tight">${loadingBox}</main></div>`;
+  if (prof.state === 'error') return `<div class="page">${header('인사기록카드', '', 'go-back')}<main class="pad tight">${errorBox(prof.msg)}</main></div>`;
   const p = prof.data;
-  if (!p) return `<div class="page">${header('인사기록카드')}<main class="pad tight">${errorBox(own ? '아직 카드가 없어요. 한 판 끝내고 랭킹에 올리면 카드가 생겨요' : '카드를 찾을 수 없어요')}</main></div>`;
+  if (!p) return `<div class="page">${header('인사기록카드', '', 'go-back')}<main class="pad tight">${errorBox(own ? '아직 카드가 없어요. 한 판 끝내고 랭킹에 올리면 카드가 생겨요' : '카드를 찾을 수 없어요')}</main></div>`;
 
   const st = stats.state === 'ok' ? stats.data : null;
   const rs: RunRow[] = runs.state === 'ok' ? runs.data : [];
@@ -82,6 +82,6 @@ export function viewPerson(idArg: string): string {
       <p class="faint" style="margin-top:6px">${rk.nickMsg ? esc(rk.nickMsg) : wait > 0 ? `${wait}일 뒤에 바꿀 수 있어요` : '7일에 한 번 바꿀 수 있어요 · 예전 기록도 새 이름으로 보여요'}</p>
     </div></section>`;
   }
-  return `<div class="page">${header('인사기록카드')}<main class="pg">${head}${teamBox}${record}${ribBox}${recentBox}${mine}</main>
+  return `<div class="page">${header('인사기록카드', '', 'go-back')}<main class="pg">${head}${teamBox}${record}${ribBox}${recentBox}${mine}</main>
     <div class="bar"><button class="btn line" data-act="${own ? 'route-home' : 'go-back'}">${own ? '로비로' : '닫기'}</button></div></div>`;
 }
