@@ -241,7 +241,7 @@ urls.push(page('privacy', '개인정보처리방침', '말뚝의 개인정보처
     <li>브라우저 설정에서 쿠키를 거부할 수 있지만, 일부 기능이 제대로 동작하지 않을 수 있어요.</li></ul>`) +
   sec('4. 보관과 삭제', `<ul><li>랭킹 기록은 서비스를 운영하는 동안 보관해요. 게임의 설정 → 계정 삭제를 누르면 서버의 내 기록, 닉네임, 호봉, 기수 소속, 로그인 정보가 바로 지워져요.</li><li>기기에 저장된 기록은 게임의 설정 메뉴나 브라우저 데이터 삭제로 지울 수 있어요.</li></ul>`) +
   sec('5. 외부 서비스', `<ul><li>Supabase · 랭킹 데이터 저장, 로그인 인증</li><li>Google · 카카오 · 로그인(선택)</li><li>Google Analytics · 방문 통계 (<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google 개인정보처리방침</a>)</li><li>Google 애드센스, 카카오 애드핏 · 광고 게재</li></ul>`) +
-  sec('6. 문의', `<p>개인정보 관련 문의는 <a href="${FORM}" target="_blank" rel="noopener">문의 페이지</a>로 남겨 주세요.</p><p style="font-size:13px;color:var(--faint)">시행일 2026년 11월 30일 (로그인 · 인사기록카드 추가)</p>`)));
+  sec('6. 문의', `<p>개인정보 관련 문의는 <a href="${FORM}" target="_blank" rel="noopener">문의 페이지</a>로 남겨 주세요.</p><p style="font-size:13px;color:var(--faint)">시행일 2026년 11월 14일 (로그인 · 인사기록카드 추가)</p>`)));
 
 // ── 이용약관 ──
 urls.push(page('terms', '이용약관', '말뚝 이용약관: 서비스, 랭킹과 닉네임, 콘텐츠, 책임에 관한 안내.', [['', '이용약관']],

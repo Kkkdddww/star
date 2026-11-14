@@ -2,7 +2,7 @@
 import type { Potential } from './types';
 
 /** 첫 회차 월요일 (한국 시간) */
-export const CONTEST_FROM = '2026-11-30';
+export const CONTEST_FROM = '2026-11-16';
 /** 대항전 판은 모두 잠재력 A (난이도 보통) */
 export const CONTEST_POT: Potential = 'A';
 /** 한 사람이 들어갈 수 있는 대항전 기수 수 */
