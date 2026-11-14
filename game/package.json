@@ -7,6 +7,7 @@
     "check": "tsc --noEmit -p .",
     "build": "node web/build.mjs && tsx web/pages.ts",
     "deploy": "npm run check && npm run build && node web/deploy.mjs",
+    "deploy:beta": "npm run check && node web/build.mjs && node web/deploy-beta.mjs",
     "sim": "tsx sim/balance.ts 2000",
     "sim:gen": "tsx sim/gen3.ts 1500",
     "sim:pot": "tsx sim/potvs.ts 150 best",

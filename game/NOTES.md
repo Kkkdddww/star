@@ -162,3 +162,4 @@
 - 인사기록카드 `ui/person.ts`(#/p/아이디, #/p/me): 랭킹 줄 · 시상대 · 기수 명부 · 점수 반영 줄에서 열림. 호봉 `engine/hobong.ts`(n→n+1 필요 200+15(n−1), 30호봉 약 두 달).
 - 설정: 계정(구글 · 카카오 연결, 다른 기기 계정으로 로그인, 로그아웃, 계정 삭제). 개인정보처리방침 수정(로그인 · 인사기록카드 · 계정 삭제).
 - 기수 만들기는 로그인(연결) 필요. 꾸미기 해금(5호봉마다)은 아직 없음.
+- 베타 주소: `npm run deploy:beta` → 저장소 맨 위 `beta/index.html` (malttuk.com/beta). noindex, GA · 애드센스 끔, 로비 제목 옆 "베타". 같은 도메인이라 localStorage · 로그인 세션 · Supabase를 지금 사이트와 같이 씀. robots.txt에 `Disallow: /beta/`. v3.3은 베타로 먼저 내고, 확인 뒤 `npm run deploy`로 정식 반영.
