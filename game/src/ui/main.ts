@@ -14,7 +14,7 @@ import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, 
 import { asg, assignmentsFor, isRequired, lacksRequired, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
 import { RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
-import { careerScore, promotionBreakdown, weakestStats } from '../engine/promotion';
+import { careerScore, meritLine, promotionBreakdown, weakestStats } from '../engine/promotion';
 import { graduate, rollOrigin, SCHOOL_MOMENTS, type Graduation } from '../engine/school';
 import { eul, eunNeun, hasJong, iga, ro } from '../engine/text';
 import { STAT_KEYS, STAT_LABEL, type Branch, type DeskResult, type Outcome, type GameState, type Origin, type Path, type Policy, type Potential, type Rank, type SchoolFocus, type StatKey, type Stats, type YearReport } from '../engine/types';
@@ -671,14 +671,14 @@ function viewRecord(g: GameState): string {
     <div class="hd"><span>지금 심사를 받는다면</span><em>${RANKS[rankCount(me.rank) + 1]} 진급</em></div>
     <div class="bd">
       ${REQUIRED_BILLET[me.rank] ? `<div class="kv" style="margin-bottom:14px"><span>필수 보직</span><b>${REQUIRED_BILLET[me.rank]!.label} ${lacksRequired(me) ? '<span class="chip red">아직 안 함</span>' : '<span class="chip on">완료</span>'}</b></div>` : ''}
-      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, `55 + 핵심 ${me.rankLog.core ? 25 : 0} + 보조 ${Math.min(2, me.rankLog.support.length) * 10}${me.origin === '육사' ? ' + 출신 3' : ''}`], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
+      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, `55 + 핵심 ${me.rankLog.core ? 25 : 0} + 보조 ${Math.min(2, me.rankLog.support.length) * 10}${me.origin === '육사' ? ' + 출신 3' : ''}`], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
         .filter((x) => x[1] > 0).map(([l, w, v, d]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(w * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track light"><div style="width:${v}%"></div></div><p class="faint" style="margin-top:4px">${d}</p></div>`).join('')}
     </div>
   </section>` : ''}
   ${save!.potentialSeen ? `<section class="doc"><div class="hd"><span>교관 평가서</span><em>임관 당시</em></div><div class="bd"><div class="kv"><span>잠재력${save!.potentialSeen.includes('~') ? ' 범위' : ''}</span><b class="olive">${save!.potentialSeen}${save!.potentialSeen.includes('~') ? '' : '등급'}</b></div></div></section>` : ''}
   <section class="doc">
     <div class="hd"><span>규칙 한눈에</span></div>
-    <div class="bd"><p class="body">1년 성장은 숨은 <b>잠재력</b>과 <b>나이</b>로 정해지고, 절반은 보직 능력치·절반은 집중 육성으로 가요. <b>결재</b> 결과는 나이와 상관없이 바로 더해져요. 진급은 <b>평정·경력·교육·역량 균형</b>을 동기와 비교해 정원만큼 선발해요. 대위는 <b>중대장</b>, 중령은 <b>대대장</b>, 대령은 <b>연대장이나 본부 과장</b>을 거쳐야 심사를 받을 수 있어요. 능력치는 80을 넘으면 덜 올라요.</p></div>
+    <div class="bd"><p class="body">1년 성장은 숨은 <b>잠재력</b>과 <b>나이</b>로 정해지고, 절반은 보직 능력치·절반은 집중 육성으로 가요. <b>결재</b> 결과는 나이와 상관없이 바로 더해져요. 진급은 <b>평정·경력·공적(이 계급의 표창·무사고 지휘)·교육·역량 균형</b>을 동기와 비교해 정원만큼 선발해요. 대위는 <b>중대장</b>, 중령은 <b>대대장</b>, 대령은 <b>연대장이나 본부 과장</b>을 거쳐야 심사를 받을 수 있어요. 능력치는 80을 넘거나 잠재력 한계에 가까우면 덜 오르지만 멈추지는 않아요.</p></div>
   </section>`;
 }
 
@@ -955,7 +955,7 @@ function viewPromotion(r: YearReport): string {
   const p = r.promotion!;
   const lastTry = !p.selected && p.attempt >= p.tries;
   const w = PROMOTION[p.from]!.weights;
-  const parts = ([['평정', w.eval, p.breakdown.eval], ['경력', w.career, p.breakdown.career], ['교육', w.edu, p.breakdown.edu], ['전투', w.combat, p.breakdown.combat], ['균형', w.balance, p.breakdown.balance]] as [string, number, number][]).filter((x) => x[1] > 0);
+  const parts = ([['평정', w.eval, p.breakdown.eval], ['경력', w.career, p.breakdown.career], ['공적', p.breakdown.merit === undefined ? 0 : w.merit, p.breakdown.merit ?? 0], ['교육', w.edu, p.breakdown.edu], ['전투', w.combat, p.breakdown.combat], ['균형', w.balance, p.breakdown.balance]] as [string, number, number][]).filter((x) => x[1] > 0);
   const peers = [...p.peers].sort((a, b) => b.score - a.score).slice(0, 6);
   return `
   <div class="page"><div class="pad tight">
@@ -969,7 +969,7 @@ function viewPromotion(r: YearReport): string {
         <div class="kv"><span>남은 기회</span><b>${p.selected ? '-' : lastTry ? '없음' : `${p.tries - p.attempt}번`}</b></div>
       </div>
       ${parts.map(([l, wt, v]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(wt * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track ${l === p.weakest.label && !p.selected ? 'light' : ''}"><div style="width:${v}%"></div></div></div>`).join('')}
-      ${!p.selected ? `<div class="opinion"><p class="faint">가장 아쉬웠던 항목 · ${p.weakest.label}</p><p>${p.weakest.why}</p></div>` : ''}
+      ${!p.selected ? `<div class="opinion">${p.cut !== null && p.cut - p.score <= 3 ? `<p><b>아깝게 떨어졌어요 · ${(Math.round((p.cut - p.score) * 10) / 10).toFixed(1)}점 차</b></p>` : ''}<p class="faint">더 올려볼 항목 · ${p.weakest.label}</p><p>${p.weakest.why}</p></div>` : ''}
     </div>
     <p class="sec">함께 심사받은 동기</p>
     ${peers.length ? peers.map((x) => `<div class="mate"><div class="g"><b>${esc(x.name)} ${x.rival ? '<span class="chip red">라이벌</span>' : ''}</b><span>${x.origin} · ${x.score.toFixed(1)}점</span></div><span class="chip ${x.selected ? '' : 'gray'}">${x.selected ? '선발' : '낙천'}</span></div>`).join('') : '<p class="sub">함께 심사받은 동기가 없어요.</p>'}

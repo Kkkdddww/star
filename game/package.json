@@ -11,7 +11,8 @@
     "sim": "tsx sim/balance.ts 2000",
     "sim:gen": "tsx sim/gen3.ts 1500",
     "sim:pot": "tsx sim/potvs.ts 150 best",
-    "qa": "node qa/smoke.mjs && node qa/contest.mjs"
+    "qa": "node qa/smoke.mjs && node qa/contest.mjs",
+    "sim:tune": "tsx sim/tune.ts 2000 mix best"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",

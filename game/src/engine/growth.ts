@@ -1,6 +1,6 @@
 // 성장 규칙 (C안): 잠재력·나이가 기본 성장을, 보직·집중 육성이 방향을 정한다.
 // 선택 이벤트 보상은 여기와 별개로 나이와 무관하게 바로 더해진다.
-import { ageFactor, FITNESS_DECLINE_AGE, PATH_WEIGHTS, POTENTIAL, SOFT_CAP, STAT_MAX } from '../data/config';
+import { ageFactor, FITNESS_DECLINE_AGE, GROWTH_FLOOR, PATH_WEIGHTS, POTENTIAL, SOFT_CAP, STAT_MAX } from '../data/config';
 import type { Rng } from './rng';
 import { STAT_KEYS, type Assignment, type Branch, type Officer, type Path, type StatKey, type Stats } from './types';
 
@@ -13,7 +13,7 @@ export function overall(stats: Stats, path: Path): number {
 export function growthPoints(me: Officer, rng: Rng): number {
   const p = POTENTIAL[me.hidden.potential];
   const base = rng.int(p.min, p.max) * ageFactor(me.age);
-  const room = Math.max(0, Math.min(1, (p.cap - overall(me.stats, me.path)) / 10));
+  const room = Math.max(GROWTH_FLOOR, Math.min(1, (p.cap - overall(me.stats, me.path)) / 10));
   return Math.max(0, Math.round(base * room));
 }
 
