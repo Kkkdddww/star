@@ -163,3 +163,4 @@
 - 설정: 계정(구글 · 카카오 연결, 다른 기기 계정으로 로그인, 로그아웃, 계정 삭제). 개인정보처리방침 수정(로그인 · 인사기록카드 · 계정 삭제).
 - 기수 만들기는 로그인(연결) 필요. 꾸미기 해금(5호봉마다)은 아직 없음.
 - 베타 주소: `npm run deploy:beta` → 저장소 맨 위 `beta/index.html` (malttuk.com/beta). noindex, GA · 애드센스 끔, 로비 제목 옆 "베타". 같은 도메인이라 localStorage · 로그인 세션 · Supabase를 지금 사이트와 같이 씀. robots.txt에 `Disallow: /beta/`. v3.3은 베타로 먼저 내고, 확인 뒤 `npm run deploy`로 정식 반영.
+- 정식 반영(2026-11-14): 대항전 첫 회차를 11/16(월)로 앞당김(`CONTEST_FROM`). 베타에서 카카오 · 구글 로그인 왕복 확인 완료(Supabase manual linking 켬). 로그인 화면 `ui/login.ts`(#/login, 카카오 · Google 브랜드 버튼).
