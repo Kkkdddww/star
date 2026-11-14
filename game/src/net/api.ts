@@ -159,9 +159,12 @@ export class AlreadyError extends Error {}
 
 export interface Profile { id: string; nickname: string; equipped_title: string | null; main_cohort?: string | null; serial?: number | null; nick_changed_at?: string | null; created_at?: string }
 
+/** 내 프로필. 로그인 서버(Auth)를 부르지 않는다: 이 기기에 계정이 없으면(처음 온 사람) 그냥 null.
+ *  (v3.3.1 전에는 여기서 session()을 불러 방문자마다 익명 계정을 새로 만들어 Auth에 부담이 컸음) */
 export async function getProfile(): Promise<Profile | null> {
-  const s = await session();
-  const rows = await rest<Profile[]>(`profiles?id=eq.${s.user_id}&select=*`);
+  const id = myId();
+  if (!id) return null;
+  const rows = await rest<Profile[]>(`profiles?id=eq.${id}&select=*`);
   return rows[0] ?? null;
 }
 export async function saveProfile(nickname: string, title: string | null): Promise<void> {
