@@ -1309,7 +1309,7 @@ async function upload(g: GameState) {
       ...(isGroup(g) ? { mode: 'cohort' as const, cohort_id: g.group!.id } : {}),
       ...(isContest(g) ? { mode: 'contest' as const, week: g.week! } : {}),
     });
-    if (isContest(g)) invalidate('contest');
+    if (isContest(g)) invalidate('contest'); unstash('');
     if (isDaily(g)) invalidateDaily();
     if (isGroup(g)) invalidate('grpruns');
     save!.runId = id; persist();
@@ -1611,14 +1611,14 @@ root.addEventListener('click', (e) => {
       const job = cs.edit ? updateTeam(cs.edit, input).then(() => null) : createTeam(input);
       void job.then(async (c) => {
         cs.busy = false;
-        invalidate('contest'); invalidate('grp');
+        invalidate('contest'); unstash(''); invalidate('grp');
         if (c) { await ensureMainTeam(c.id); track('team_create'); location.hash = `#/c/${c.code}`; }
         else { toast('고쳤어요'); history.back(); }
       }).catch((e) => { cs.busy = false; cs.msg = e instanceof Error ? e.message : '저장하지 못했어요'; render(); });
       break;
     }
     case 'team-join': {
-      void joinTeam(v).then(async () => { invalidate('contest'); await ensureMainTeam(v); toast('기수에 들어갔어요'); track('team_join'); render(); })
+      void joinTeam(v).then(async () => { invalidate('contest'); unstash(''); await ensureMainTeam(v); toast('기수에 들어갔어요'); track('team_join'); render(); })
         .catch((e) => toast(e instanceof Error ? e.message : '들어가지 못했어요'));
       break;
     }
@@ -1632,7 +1632,7 @@ root.addEventListener('click', (e) => {
         const open = cand.filter((t) => (cnt[t.id] ?? 0) < t.max_members).sort((a, b) => (cnt[a.id] ?? 0) - (cnt[b.id] ?? 0));
         if (!open.length) { toast('자리가 있는 공개 기수가 없어요. 직접 만들어 보세요'); return; }
         const pick = open[Math.floor(Math.random() * Math.min(3, open.length))];
-        await joinTeam(pick.id); invalidate('contest'); await ensureMainTeam(pick.id);
+        await joinTeam(pick.id); invalidate('contest'); unstash(''); await ensureMainTeam(pick.id);
         track('team_random'); toast(`'${pick.name}' 기수에 들어갔어요`); location.hash = `#/c/${pick.code}`;
       }).catch((e) => toast(e instanceof Error ? e.message : '들어가지 못했어요'));
       break;
@@ -1640,7 +1640,7 @@ root.addEventListener('click', (e) => {
     case 'team-leave': {
       if (!confirm('이 기수에서 나갈까요? 이번 주 기록은 기수 점수에서 빠져요.')) break;
       void leaveTeam(v).then(async () => {
-        invalidate('contest');
+        invalidate('contest'); unstash('');
         const prof = await getProfile().catch(() => null);
         if (prof?.main_cohort === v) await setMainTeam(null).catch(() => {});
         invalidate('profile'); toast('기수에서 나왔어요'); location.hash = '#/contest';

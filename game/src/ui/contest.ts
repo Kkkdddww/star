@@ -4,7 +4,7 @@ import { CONTEST_FROM, contestOpen, crowdBonus, daysLeftInWeek, MAX_TEAMS, perso
 import type { Rank } from '../engine/types';
 import { hobongOf } from '../engine/hobong';
 import {
-  contestBoard, contestTotals, getProfile, xpOf, memberCounts, myId, myTeams, nicknames, publicTeams, teamHonors, teamMembers, teamPlaces, teamTags, today, weekRuns,
+  contestBoard, contestTotals, getProfile, memberCounts, myId, myTeams, nicknames, publicTeams, teamHonors, teamMembers, teamPlaces, teamTags, today, weekRuns,
   type BoardRow, type CohortRow, type Honors, type MyTeam, type RunRow,
 } from '../net/api';
 import { awards } from './group';
@@ -285,7 +285,6 @@ export function viewAward(code: string, week: string, c: CohortRow | null): stri
 }
 
 // ── 랭킹 줄: 지금 닉네임 + 닉네임 옆 약장 (대표 기수) ──
-const RANK_HOBONG = false;
 type Person = { nick: string | null; tag: { ribbon: number[] | null; no: number | null; name: string; cohort: string } | null; hb?: number };
 const people = new Map<string, Person | undefined>();
 const honorCache = new Map<string, Honors | null>();
@@ -296,9 +295,9 @@ function flush() {
   if (!ids.length) return;
   void teamTags(ids).then(async (rows) => {
     for (const id of ids) people.set(id, { nick: null, tag: null });
-    for (const r of rows) people.set(r.id, { nick: r.nickname, tag: r.cohorts && r.main_cohort ? { ...r.cohorts, cohort: r.main_cohort } : null });
-    // 랭킹 호봉: 서버 부담 때문에 잠시 끔 (profiles에 저장된 호봉 칸이 생기면 다시 켬)
-    if (RANK_HOBONG) { const xs = await xpOf(ids).catch(() => [] as { user_id: string; xp: number }[]); for (const x of xs) { const pp = people.get(x.user_id); if (pp) pp.hb = hobongOf(x.xp).level; } }
+    // 호봉은 프로필에 저장된 경험치(xp)로 (SQL v3.3.1 전에는 없음 → 표시 안 함)
+    for (const r of rows) people.set(r.id, { nick: r.nickname, tag: r.cohorts && r.main_cohort ? { ...r.cohorts, cohort: r.main_cohort } : null, hb: typeof r.xp === 'number' && r.xp > 0 ? hobongOf(r.xp).level : undefined });
+
     const cids = [...new Set(rows.map((r) => r.main_cohort).filter((x): x is string => !!x && !honorCache.has(x)))];
     if (cids.length) { const hs = await teamHonors(cids).catch(() => [] as Honors[]); for (const c of cids) honorCache.set(c, hs.find((h) => h.cohort_id === c) ?? null); }
     refresh();
