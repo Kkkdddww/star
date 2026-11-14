@@ -275,6 +275,12 @@ function lobbyTab(): LobbyTab {
   return t;
 }
 
+/** 로그인 권유 한 줄 (연결 전에만): 로비 · 전역 화면 */
+function loginRow(): string {
+  if (loginInfo().linked) return '';
+  return `<a class="loginrow" href="#/settings"><span class="tx"><b>로그인하고 기록 지키기</b>기기를 바꿔도 호봉 · 기수 · 기록이 이어져요</span><span class="go">구글 · 카카오</span></a>`;
+}
+
 /** 로비 맨 위: 내 카드 한 줄 (v3.3 인사기록카드 입구) */
 function meCard(best: number): string {
   // 서버 기록이 있으면 최고 계급은 서버 기준
@@ -354,7 +360,7 @@ function viewLobby(): string {
     ${guestPreview()}
     <main class="stack" style="padding-bottom:${primary ? 120 : 32}px">
       ${meCard(best)}
-      ${!loginInfo().linked && (meta.runs ?? 0) > 0 ? `<a class="loginrow" href="#/settings"><span class="tx"><b>기록 지키기</b> · 기기를 바꿔도 이어져요</span><span class="go">구글 · 카카오 ›</span></a>` : ''}
+      ${loginRow()}
       <div class="tiles">
         ${tile('d', 'calendar', '매일', '오늘의 기수', dSub)}
         ${tile('c', 'people', '매주', '대항전', cSub)}
@@ -1244,6 +1250,7 @@ function viewEnding(g: GameState): string {
     ${contest && save!.runId ? contestAfter(g.week!) : ''}
     ${group && save!.runId ? `<a class="newnote" style="margin:0 0 12px" href="#/c/${g.group!.code}"><span class="nb">순위</span><span><b>${esc(g.group!.name)} 순위 보기</b><span>동기들과의 갈림길, 기수 시상</span></span>${icon('chev')}</a>` : ''}
     ${uploadBox()}
+    ${save!.runId ? `<div style="margin:-2px -12px 12px">${loginRow()}</div>` : ''}
     ${dailyBox}
     ${daily && save!.runId ? dailyNext() : ''}
     ${hs ? `<p class="sec">명예 점수 ${hs.total}</p><div class="doc" style="margin:0"><div class="bd" style="padding-top:16px">${hs.parts.map((x) => `<div class="kv"><span>${x.label}</span><b>${x.v > 0 ? '+' : ''}${x.v}</b></div>`).join('')}<p class="faint" style="margin-top:6px">같은 계급이면 명예 점수가 높은 사람이 앞서요</p></div></div>` : ''}

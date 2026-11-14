@@ -286,7 +286,7 @@ export function dailyResult(m: DailyMine): string {
   const count = load(`dcount:${m.day}`, () => dailyCount(m.day));
   const stats = load(`dstats:${m.day}`, () => dailyChoiceStats(m.day));
   const head = place.state === 'ok' && count.state === 'ok'
-    ? `<div class="big" style="margin:0"><b>${count.data}명 중 ${place.data}위</b><p>${dayLabel2(m.day)} 기수 · 같은 출발선에서 겨뤘어요</p><span>상위 ${Math.max(1, Math.round((place.data / Math.max(1, count.data)) * 100))}%</span></div>`
+    ? (() => { const n = Math.max(count.data, place.data), pl = Math.min(place.data, n); return `<div class="dres"><b>${pl.toLocaleString()}위<small>/ ${n.toLocaleString()}명</small></b><p>${dayLabel2(m.day)} 기수 · 같은 출발선에서 겨뤘어요</p><span class="chip on">상위 ${Math.min(100, Math.max(1, Math.round((pl / Math.max(1, n)) * 100)))}%</span></div>`; })()
     : `<p class="sub">${place.state === 'error' ? esc(place.msg) : '순위를 불러오는 중이에요…'}</p>`;
   let picks = '';
   if (stats.state === 'ok' && stats.data.length) {
