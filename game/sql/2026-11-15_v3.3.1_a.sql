@@ -1,4 +1,6 @@
--- 말뚝 v3.3.1 · 대항전 팀 점수 규칙 변경 (Supabase > SQL Editor에 붙여넣고 Run, 한 번만)
+-- ① 먼저 이것만 Run (몇 초). 팀 점수 규칙 + 저장 칸 + 트리거 + 가벼운 호봉 읽기
+-- 이게 끝나면 무거운 호봉 계산이 바로 멈춰요. 호봉 숫자는 ②를 돌리기 전까지 0으로 보여요
+-- 말뚝 v3.3.1 ①
 -- 팀 점수 = 이번 주 전역한 기수원 전원 평균 + 전역자 10명마다 +5 (10명 +5, 20명 +10, 30명 +15)
 -- 칸 이름 · 순서는 그대로라 contest_results · team_honors 뷰는 손대지 않아도 따라 바뀌어요
 create or replace view contest_board with (security_invoker = true) as
@@ -26,32 +28,6 @@ alter table profiles add column if not exists best_rank int;
 alter table profiles add column if not exists best_free int;
 alter table profiles add column if not exists daily_days int not null default 0;
 alter table profiles add column if not exists contest_weeks int not null default 0;
-
--- 처음 한 번 채우기 (예전부터 '개발자' 같은 이름을 쓰던 프로필 때문에 닉네임 규칙을 잠깐 빼고 다시 넣어요)
-alter table profiles drop constraint if exists nick_no_staff;
-with r as (
-  select user_id, mode, rank_index,
-         row_number() over (partition by user_id, mode, (created_at at time zone 'Asia/Seoul')::date order by created_at) as nth
-  from runs
-), s as (
-  select user_id,
-         count(*)::int as runs_n,
-         count(*) filter (where rank_index >= 6)::int as generals,
-         count(*) filter (where rank_index = 9)::int as fourstars,
-         max(rank_index)::int as best_rank,
-         (max(rank_index) filter (where mode = 'free'))::int as best_free,
-         count(*) filter (where mode = 'daily')::int as daily_days,
-         count(*) filter (where mode = 'contest')::int as contest_weeks,
-         sum(case when mode = 'free' and nth > 5 then 0
-                  else 20 + 5 * rank_index + case mode when 'daily' then 30 when 'contest' then 20 else 0 end end)::int as xp
-  from r group by user_id
-)
-update profiles p set xp = s.xp, runs_n = s.runs_n, generals = s.generals, fourstars = s.fourstars,
-  best_rank = s.best_rank, best_free = s.best_free, daily_days = s.daily_days, contest_weeks = s.contest_weeks
-from s where s.user_id = p.id;
-alter table profiles add constraint nick_no_staff check (
-  replace(nickname, ' ', '') !~* '(개발자|운영자|운영진|운영팀|관리자|인사과장|동우캉|admin|(^|[^a-z])gm($|[^a-z]))'
-) not valid;
 
 -- 판을 올릴 때마다 프로필에 더하기 (자유 플레이 경험치는 하루 5판까지)
 create or replace function runs_to_profile() returns trigger language plpgsql security definer set search_path = public as $$
