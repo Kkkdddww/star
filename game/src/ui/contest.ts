@@ -1,6 +1,6 @@
 // v3.3 기수 대항전 화면: 대항전(#/contest), 기수 만들기(#/contest/new), 대항전 기수 페이지(#/c/코드), 표창장(#/award/코드/주)
 // 로비의 대항전 문서, 전역 화면의 팀 반영, 랭킹 닉네임 옆 약장도 여기서 만든다
-import { CONTEST_FROM, contestOpen, crowdBonus, daysLeftInWeek, MAX_TEAMS, personScore, teamScore, weekEnd, weekNo, weekOf, prevWeek } from '../engine/contest';
+import { CONTEST_FROM, contestOpen, crowdBonus, EMPTY_SLOT, TOP_N, daysLeftInWeek, MAX_TEAMS, personScore, teamScore, weekEnd, weekNo, weekOf, prevWeek } from '../engine/contest';
 import type { Rank } from '../engine/types';
 import { hobongOf } from '../engine/hobong';
 import {
@@ -75,7 +75,7 @@ export function contestDoc(play: { label: string; act: string }): string {
   const head = `<div class="hd">
     <div class="dn">주간 공문 · ${docNo(week)} · ${md(week)}~${md(weekEnd(week))}${open ? ` · <b>D-${dLeft()}</b>` : ''}</div>
     <div class="tt">기수 대항전<em>${open ? `${rows.length}개 기수` : `첫 회차 ${md(CONTEST_FROM)}(월)`}</em></div>
-    ${!open && totalsText() ? `<p class="ds">지금까지 <b class="olive">${totalsText()}</b>이 모였어요</p>` : mine?.length ? '' : '<p class="ds">팀으로 겨루는 한 주 · 동기 전원 평균 + 10명마다 +5</p>'}
+    ${!open && totalsText() ? `<p class="ds">지금까지 <b class="olive">${totalsText()}</b>이 모였어요</p>` : mine?.length ? '' : '<p class="ds">팀으로 겨루는 한 주 · 상위 10명 평균, 동기가 많을수록 유리해요</p>'}
   </div>`;
   let body = '';
   if (mine?.length) {
@@ -131,7 +131,8 @@ export function viewContest(): string {
     <p class="ds">${md(week)}(월) ~ ${md(weekEnd(week))}(일) 24시 · 모든 기수가 같은 세상, 난이도 보통 · 한 사람 한 주 한 판</p>
   </div><div class="bd">
     <div class="kv"><span>${open ? '참가' : '지금까지 모임'}</span><b>${open ? `${rows.length}개 기수 · ${rows.reduce((a, r) => a + r.n, 0)}명` : totalsText() ?? '불러오는 중…'}</b></div>
-    <div class="kv"><span>팀 점수</span><b>전역한 동기 전원 평균 + 10명마다 +5</b></div>
+    <div class="kv"><span>팀 점수</span><b>상위 10명 평균 + 11번째부터 +2</b></div>
+    <p class="faint" style="margin-top:6px">10명이 안 되면 빈자리는 300점으로 계산해요. 웬만큼 하고 전역하면 300점보다 높아서, 누가 와도 팀 점수가 올라가요</p>
     <div class="kv"><span>포상</span><b>1~3위 표창장 · 약장에 별</b></div>
   </div></section>`;
 
@@ -229,11 +230,12 @@ export function viewTeam(c: CohortRow): string {
     <div class="bigrk">${place ? `<b>${place.place}위</b>` : `<b class="sm">${open ? '순위 전' : '출전 대기'}</b>`}${place?.gap !== null && place?.gap !== undefined ? `<span class="sub">3위까지 ${place.gap}점</span>` : ''}</div>
   </div><div class="bd">
     ${score !== null ? `<div class="kv"><span>팀 점수</span><b>${score}</b></div>
-    <div class="kv"><span>전원 ${pts.length}명 평균</span><b>${Math.round(pts.reduce((a, x) => a + x.p, 0) / pts.length)}</b></div>
-    <div class="kv"><span>인원 보너스</span><b>${crowdBonus(pts.length) ? `+${crowdBonus(pts.length)}` : '0'} <span class="faint">${10 - (pts.length % 10)}명 더 전역하면 +5</span></b></div>
-    <div class="lk"><span>이번 주 전역한 동기 ${pts.length}명</span></div>${pts.map((x) => who(x, String(x.p))).join('')}`
+    <div class="kv"><span>상위 ${TOP_N}명 평균</span><b>${Math.round((pts.slice(0, TOP_N).reduce((a, x) => a + x.p, 0) + Math.max(0, TOP_N - pts.length) * EMPTY_SLOT) / TOP_N)}${pts.length < TOP_N ? ` <span class="faint">빈자리 ${TOP_N - pts.length}명 × ${EMPTY_SLOT}</span>` : ''}</b></div>
+    <div class="kv"><span>인원 점수</span><b>${crowdBonus(pts.length) ? `+${crowdBonus(pts.length)}` : '0'} <span class="faint">11번째부터 1명당 +2 (최대 +40)</span></b></div>
+    <div class="lk"><span>점수에 들어간 ${Math.min(TOP_N, pts.length)}명</span></div>${pts.slice(0, TOP_N).map((x) => who(x, String(x.p))).join('')}
+    ${pts.length > TOP_N ? `<div class="lk"><span>인원 +2를 보탠 동기</span></div>${pts.slice(TOP_N).map((x) => who(x, '+2')).join('')}` : ''}`
     : `<p class="sub">${open ? '이번 주 전역한 동기가 아직 없어요. 전역 2명부터 순위에 올라요.' : `${md(CONTEST_FROM)}(월)부터 한 주에 한 판씩 출전해요.`}</p>`}
-    ${notYet.length && members.length ? `<div class="lk"><span>아직 안 한 동기 ${notYet.length}명</span></div><p class="sub">${notYet.slice(0, 8).map((m) => esc(nm(m.user_id))).join(' · ')}${notYet.length > 8 ? ` 외 ${notYet.length - 8}명` : ''}${(pts.length + 1) % 10 === 0 ? ' — 한 명 더 하면 +5예요' : ''}</p>
+    ${notYet.length && members.length ? `<div class="lk"><span>아직 안 한 동기 ${notYet.length}명</span></div><p class="sub">${notYet.slice(0, 8).map((m) => esc(nm(m.user_id))).join(' · ')}${notYet.length > 8 ? ` 외 ${notYet.length - 8}명` : ''}${pts.length < TOP_N ? ' — 한 명 더 하면 빈자리 300점 대신 그 동기 점수가 들어가요' : pts.length < 30 ? ' — 한 명 더 하면 +2예요' : ''}</p>
     <button class="btn line" style="height:44px;margin-top:10px" data-act="grp-share" data-v="${c.code}">동기 부르기</button>` : ''}
   </div></section>`;
 

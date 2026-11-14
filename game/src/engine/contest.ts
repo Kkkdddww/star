@@ -33,9 +33,14 @@ export const contestOpen = (day: string) => day >= CONTEST_FROM;
 
 /** 개인 점수: 계급마다 100 + 명예 점수 */
 export const personScore = (rankIndex: number, honor: number | null | undefined) => rankIndex * 100 + (honor ?? 0);
-/** 팀 점수 (v3.3.1): 이번 주 전역한 기수원 전원 평균 + 전역자 10명마다 +5. 서버 contest_board 뷰와 같은 규칙 */
-export const crowdBonus = (n: number) => Math.floor(n / 10) * 5;
+/** 팀 점수 (v3.3.3): 상위 10명 평균(10명이 안 되면 빈자리는 기본 300점) + 11번째 전역자부터 1명당 +2 (최대 +40).
+ *  서버 contest_board 뷰와 같은 규칙 */
+export const TOP_N = 10;
+export const EMPTY_SLOT = 300;
+export const crowdBonus = (n: number) => Math.min(40, Math.max(0, n - TOP_N) * 2);
 export function teamScore(scores: number[]): number {
   if (!scores.length) return 0;
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) + crowdBonus(scores.length);
+  const top = [...scores].sort((a, b) => b - a).slice(0, TOP_N);
+  const sum = top.reduce((a, b) => a + b, 0) + (TOP_N - top.length) * EMPTY_SLOT;
+  return Math.round(sum / TOP_N) + crowdBonus(scores.length);
 }
