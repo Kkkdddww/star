@@ -287,7 +287,8 @@ function meCard(best: number): string {
   // 서버 기록이 있으면 최고 계급은 서버 기준
   const prof = load('profile', getProfile);
   const p = prof.state === 'ok' ? prof.data : null;
-  const name = p?.nickname ?? (ui.upload.nick.trim() || '닉네임 없음');
+  const needNick = prof.state === 'ok' && !p && loginInfo().linked;
+  const name = p?.nickname ?? (needNick ? '닉네임 정하기 ›' : ui.upload.nick.trim() || '닉네임 없음');
   const mine = myTeamsNow();
   const main = mine?.find((t) => t.cohort_id === p?.main_cohort) ?? mine?.[0];
   const me = myId();
@@ -296,7 +297,7 @@ function meCard(best: number): string {
   const runs = st?.state === 'ok' && st.data ? st.data.runs : meta.runs ?? 0;
   if (st?.state === 'ok' && st.data) best = Math.max(best, st.data.best_rank);
   const lv = hb ?? { level: 1, into: 0, need: 200 };
-  return `<a class="pf" href="#/p/me"><span class="pfrow">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${runs}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span></span>
+  return `<a class="pf" href="${needNick ? '#/login' : '#/p/me'}"><span class="pfrow">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${runs}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span></span>
     <span class="hbx"><b>${lv.level}<small>호봉</small></b><span>${hb ? `다음까지 ${lv.need - lv.into}` : '첫 판을 올리면 시작'}</span></span></span>
     <span class="xpbar"><i style="width:${Math.round((lv.into / lv.need) * 100)}%"></i></span></a>`;
 }
@@ -1498,11 +1499,15 @@ root.addEventListener('input', (e) => {
   if (t.id === 'gbtext') gs.gbText = t.value;
   if (t.id === 'tname') cs.name = t.value;
   if (t.id === 'tmotto') cs.motto = t.value;
+  if (t.id === 'lnick') loginState.nick = t.value;
 });
 root.addEventListener('change', (e) => {
   const t = e.target as HTMLSelectElement;
   if (t.id === 'rday') { rk.day = Number(t.value); render(); }
 });
+/** 이 페이지 안에서 화면을 옮긴 횟수: 뒤로 가기가 다른 사이트(로그인 화면 등)로 나가지 않게 */
+let hashMoves = 0;
+window.addEventListener('hashchange', () => { hashMoves++; });
 window.addEventListener('hashchange', () => { settingsState.confirmWipe = false; settingsState.msg = ''; settingsState.confirmDelete = false; settingsState.confirmLogout = false; settingsState.authMsg = ''; ui.route = routeOf(location.hash); prefillGuest(); render(); window.scrollTo(0, 0); });
 function prefillGuest() {
   if (ui.route?.name !== 'guestbook' || gs.gbNick) return;
@@ -1761,6 +1766,18 @@ root.addEventListener('click', (e) => {
     case 'open-person': location.hash = `#/p/${v}`; break;
     // v3.3 로그인
     case 'auth-link': settingsState.authMsg = ''; loginState.msg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = loginState.msg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
+    case 'nick-set': {
+      const n = (val('lnick') ?? loginState.nick).trim();
+      loginState.nick = n;
+      const bad = nicknameProblem(n);
+      if (bad) { loginState.nickMsg = bad; render(); break; }
+      loginState.busy = true; loginState.nickMsg = ''; render();
+      void saveProfile(n, null).then(() => {
+        loginState.busy = false; invalidate('profile'); invalidate('person'); forgetPeople();
+        toast(`'${n}' 이름으로 시작해요`); location.hash = '';
+      }).catch((e) => { loginState.busy = false; loginState.nickMsg = e instanceof Error ? e.message.replace(/^서버 오류 \d+ · /, '') : '저장하지 못했어요'; render(); });
+      break;
+    }
     case 'auth-signin': loginState.conflict = null; track('login_signin', { provider: v }); signInProvider(v as Provider); break;
     case 'auth-logout': {
       if (!settingsState.confirmLogout) { settingsState.confirmLogout = true; render(); break; }
@@ -1773,7 +1790,7 @@ root.addEventListener('click', (e) => {
         .catch((e) => { settingsState.authMsg = e instanceof Error ? e.message : '지우지 못했어요'; render(); });
       break;
     }
-    case 'go-back': if (history.length > 1) history.back(); else location.hash = ''; break;
+    case 'go-back': if (hashMoves > 0) history.back(); else location.hash = ''; break;
     case 'rank-tab': rk.tab = v as typeof rk.tab; render(); break;
     case 'rank-origin': rk.origin = v || null; render(); break;
     case 'save-nick': void saveNickname(); break;
@@ -1847,5 +1864,6 @@ if (authBack) { ui.route = null; invalidate(''); if (authBack.conflict) { loginS
 render();
 if (authBack) {
   track(authBack.ok ? 'login_ok' : 'login_fail', { kind: authBack.kind });
+  if (authBack.ok) void getProfile().then((p) => { if (!p) location.hash = '#/login'; }).catch(() => {});
   if (!authBack.conflict) toast(authBack.ok ? (authBack.kind === 'link' ? '로그인했어요 · 이제 기기를 바꿔도 기록이 이어져요' : '로그인했어요') : authBack.msg ?? '로그인하지 못했어요');
 }

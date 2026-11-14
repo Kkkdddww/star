@@ -162,7 +162,7 @@ export function viewContest(): string {
 export function viewTeamForm(): string {
   const [b, p, c] = cs.ribbon;
   const sw = (arr: string[], on: number, act: string) => `<div class="sw">${arr.map((col, i) => `<button class="${i === on ? 'on' : ''}" style="background:${col}" data-act="${act}" data-v="${i}" aria-label="${i + 1}번"></button>`).join('')}</div>`;
-  return `<div class="page">${header(cs.edit ? '기수 고치기' : '새 기수 만들기')}<main class="pg">
+  return `<div class="page">${header(cs.edit ? '기수 고치기' : '새 기수 만들기', '', 'go-back')}<main class="pg">
   <section class="doc" style="margin-top:4px"><div class="thead">${teamRibbon(cs.ribbon, 190)}<p class="tmeta">${cs.edit ? '기수 번호는 그대로예요' : '기수 번호는 만들 때 정해져요'}</p><p class="tnm">${esc(cs.name.trim() || '기수 이름')}</p>${cs.motto.trim() ? `<p class="tmt">"${esc(cs.motto.trim())}"</p>` : ''}</div>
   <div class="bd" style="padding-top:0">
     <p class="lbl">기수 이름</p><input id="tname" class="inp" style="background:var(--bg);height:48px" maxlength="16" placeholder="예: 임관 동기 모임" value="${esc(cs.name)}">
@@ -251,12 +251,12 @@ export function viewTeam(c: CohortRow): string {
     : members.length >= c.max_members ? '<button class="btn" disabled>정원 30명이 다 찼어요</button>'
     : myCount >= MAX_TEAMS ? `<button class="btn" disabled>기수는 ${MAX_TEAMS}곳까지 들어갈 수 있어요</button>`
     : `<div class="two"><button class="btn line" data-act="grp-share" data-v="${c.code}">공유</button><button class="btn" data-act="team-join" data-v="${c.id}">이 기수 들어가기</button></div>`;
-  return `<div class="page">${header('기수')}<main class="pg">${headDoc}${weekDoc}${awardBox}${roster}${history}${mine}</main><div class="bar">${bar}</div></div>`;
+  return `<div class="page">${header('기수', '', 'go-back')}<main class="pg">${headDoc}${weekDoc}${awardBox}${roster}${history}${mine}</main><div class="bar">${bar}</div></div>`;
 }
 
 // ── 표창장 ──
 export function viewAward(code: string, week: string, c: CohortRow | null): string {
-  if (!c) return `<div class="page">${header('표창장')}<main class="pad tight">${loadingBox}</main></div>`;
+  if (!c) return `<div class="page">${header('표창장', '', 'go-back')}<main class="pad tight">${loadingBox}</main></div>`;
   const hist = load(`contest:hist:${c.id}`, () => teamPlaces(c.id));
   const h = hist.state === 'ok' ? hist.data.find((x) => x.week === week) : null;
   const fin = week < weekOf(today());
@@ -275,7 +275,7 @@ export function viewAward(code: string, week: string, c: CohortRow | null): stri
       <div class="sign">말뚝 인사과장 <span class="stamp"><b>인사</b><i>과장</i></span></div>
     </div>`;
   }
-  return `<div class="page">${header('표창장')}<main class="pad tight" style="padding-top:8px">${body}</main>
+  return `<div class="page">${header('표창장', '', 'go-back')}<main class="pad tight" style="padding-top:8px">${body}</main>
     <div class="bar"><div class="two"><button class="btn line" data-act="copy-award">링크 복사</button><a class="btn" href="#/c/${code}" style="display:flex;align-items:center;justify-content:center;text-decoration:none">기수 페이지</a></div></div></div>`;
 }
 

@@ -110,8 +110,9 @@ export const rk = { tab: 'top' as 'daily' | 'hq' | 'top' | 'mine', day: 0, origi
 export const loadingBox = '<div class="doc"><div class="bd" style="padding-top:22px"><p class="sub">불러오는 중이에요…</p></div></div>';
 export const errorBox = (m: string) => `<div class="doc"><div class="bd" style="padding-top:22px"><p class="sub">${esc(m)}</p><p class="faint" style="margin-top:6px">인터넷 연결을 확인하고 다시 열어 주세요.</p></div></div>`;
 
-export function header(title: string, sub = ''): string {
-  return `<header class="top"><button class="iconbtn" style="margin:0 0 0 -8px" data-act="route-home" aria-label="게임으로">${back}</button><span class="t">${title}</span><span class="sp"></span>${sub}</header>`;
+/** 화면 위 제목 줄. backAct 'go-back'이면 들어온 곳으로 돌아간다 (기본: 로비) */
+export function header(title: string, sub = '', backAct: 'route-home' | 'go-back' = 'route-home'): string {
+  return `<header class="top"><button class="iconbtn" style="margin:0 0 0 -8px" data-act="${backAct}" aria-label="뒤로">${back}</button><span class="t">${title}</span><span class="sp"></span>${sub}</header>`;
 }
 
 export function rowHtml(r: RunRow, n: number | null): string {
