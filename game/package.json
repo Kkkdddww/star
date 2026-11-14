@@ -1,0 +1,19 @@
+{
+  "name": "malttuk",
+  "version": "3.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit -p .",
+    "build": "node web/build.mjs && tsx web/pages.ts",
+    "deploy": "npm run check && npm run build && node web/deploy.mjs",
+    "sim": "tsx sim/balance.ts 2000",
+    "sim:gen": "tsx sim/gen3.ts 1500",
+    "sim:pot": "tsx sim/potvs.ts 150 best"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
