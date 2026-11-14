@@ -29,7 +29,7 @@ import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk,
 import { loginState } from './login';
 import { forgetPeople, contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
 import { randomRibbon, teamRibbon } from './teamRibbon';
-import { AlreadyError, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
+import { AlreadyError, hideGuest, replyGuest, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
 
 // ───────── 저장 ─────────
 interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number }
@@ -1500,6 +1500,7 @@ root.addEventListener('input', (e) => {
   if (t.id === 'tname') cs.name = t.value;
   if (t.id === 'tmotto') cs.motto = t.value;
   if (t.id === 'lnick') loginState.nick = t.value;
+  if (t.id === 'gbreply') gs.replyText = t.value;
 });
 root.addEventListener('change', (e) => {
   const t = e.target as HTMLSelectElement;
@@ -1694,6 +1695,15 @@ root.addEventListener('click', (e) => {
         .catch((e) => { gs.gbBusy = false; gs.gbMsg = e instanceof Error ? e.message : '올리지 못했어요'; render(); });
       break;
     }
+    case 'gb-reply-open': { gs.replyId = Number(v); gs.replyText = (document.querySelector(`[data-act=gb-reply-open][data-v="${v}"]`)?.closest('.gb')?.querySelector('.rep p')?.textContent) ?? ''; render(); break; }
+    case 'gb-reply-cancel': gs.replyId = 0; gs.replyText = ''; render(); break;
+    case 'gb-reply-save': {
+      gs.replyText = val('gbreply') ?? gs.replyText; gs.replyBusy = true; render();
+      void replyGuest(Number(v), gs.replyText).then(() => { gs.replyBusy = false; gs.replyId = 0; gs.replyText = ''; invalidate('gb'); toast('답글을 저장했어요'); render(); })
+        .catch((e) => { gs.replyBusy = false; toast(e instanceof Error ? e.message : '저장하지 못했어요'); render(); });
+      break;
+    }
+    case 'gb-hide': void hideGuest(Number(v), el.dataset.h === '1').then(() => { invalidate('gb'); toast(el.dataset.h === '1' ? '가렸어요' : '다시 보이게 했어요'); render(); }).catch(() => toast('바꾸지 못했어요')); break;
     case 'gb-report': reportGuest(Number(v)).then(() => toast('신고했어요. 3번 쌓이면 가려져요')).catch(() => toast('신고하지 못했어요')); break;
     case 'route-daily': rk.tab = 'daily'; location.hash = '#/rank'; if (ui.route?.name === 'rank') render(); break;
     case 'start-new': useSlot('free'); { const g = save?.game ?? null; if (g?.ended && !save!.runId && ui.upload.fails < 2) { toast('먼저 지난 기록을 랭킹에 올려 주세요'); go('ending'); break; } ui.pro = null; go('p-intro'); } break;

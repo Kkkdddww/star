@@ -35,6 +35,8 @@ async function mock(route) {
   const u = decodeURIComponent(route.request().url()), m = route.request().method();
   const j = (json, headers) => route.fulfill({ json, headers: { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-range', 'content-range': '0-0/412', ...(headers ?? {}) } });
   if (u.includes('/auth/v1/')) return j({ access_token: 'x', refresh_token: 'y', expires_in: 3600, user: { id: 'u1' } });
+  if (u.includes('/rpc/is_admin')) return j(true);
+  if (u.includes('/guestbook?select=id,user_id,nickname,body,reply,created_at,hidden')) return j([{ id: 7, user_id: 'u5', nickname: '말뚝러', body: '대항전 언제 열려요?', reply: null, created_at: new Date().toISOString(), hidden: false, reports: 0 }, { id: 6, user_id: 'u6', nickname: '이병장', body: '버그 있어요', reply: '고쳤어요', created_at: new Date().toISOString(), hidden: false, reports: 1 }, { id: 5, user_id: 'u7', nickname: '광고', body: '광고글', reply: null, created_at: new Date().toISOString(), hidden: true, reports: 3 }]);
   if (m !== 'GET') return j([T1]);
   if (u.includes('/members?user_id=eq.u1')) return j([{ cohort_id: 't1', user_id: 'u1', seq: 2, joined_at: '2026-11-20T03:00:00Z', cohorts: T1 }]);
   if (u.includes('/members?cohort_id=eq.t1')) return j(members);
@@ -88,6 +90,7 @@ await step('c08_rank', async () => { await page.goto(url + '#/rank'); await page
 await step('c10_person', async () => { await page.goto(url + '#/p/u9'); await page.reload(); await page.waitForTimeout(900); }, true);
 await step('c11_person_me', async () => { await page.goto(url + '#/p/me'); await page.reload(); await page.waitForTimeout(900); }, true);
 await step('c12_settings', async () => { await page.goto(url + '#/settings'); await page.reload(); await page.waitForTimeout(500); }, true);
+await step('c13_gb_admin', async () => { await page.goto(url + '#/guestbook'); await page.reload(); await page.waitForTimeout(900); await page.click('[data-act=gb-reply-open][data-v="7"]'); await page.waitForTimeout(300); }, true);
 await step('c09_contest_start', async () => { await page.goto(url); await page.reload(); await page.click('[data-act=lobby-tab][data-v=c]'); await page.click('.lcard [data-act=contest-go]'); await page.waitForTimeout(300); await page.fill('#nm', '테스트'); await page.click('[data-act=p-apply]'); });
 
 await browser.close();
