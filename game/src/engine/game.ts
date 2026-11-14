@@ -17,7 +17,7 @@ export interface NewGameOpts {
   schoolPct: number; bonus: Partial<Stats>; year?: number;
   creation?: { rerolls: number; viewed: boolean };
   /** 오늘의 기수·우리 기수: 세상 시드(seed)는 모두 같고, 판정 주사위만 rollSeed로 */
-  world?: { mode: 'daily' | 'cohort'; day?: string; group?: { id: string; code: string; name: string }; rollSeed: number };
+  world?: { mode: 'daily' | 'cohort' | 'contest'; day?: string; week?: string; group?: { id: string; code: string; name: string }; rollSeed: number };
 }
 const rollOf = (s: GameState) => s.rollSeed ?? s.seed;
 
@@ -40,7 +40,7 @@ export function newGame(opts: NewGameOpts): GameState {
     year, seed: opts.seed, me, cohort, rivalId: rival.id, history: [],
     desk: null, personnelDue: false, policyDue: false, personnel: [], majorYears: [...years].sort((a, b) => a - b),
     creation: opts.creation,
-    ...(opts.world ? { mode: opts.world.mode, day: opts.world.day, group: opts.world.group, rollSeed: opts.world.rollSeed } : {}),
+    ...(opts.world ? { mode: opts.world.mode, day: opts.world.day, week: opts.world.week, group: opts.world.group, rollSeed: opts.world.rollSeed } : {}),
   };
   return prepareDesk(state);
 }

@@ -146,3 +146,11 @@
 - 명예의 전당 시즌: `SEASON2_FROM`(11-15) 기준 `ended_on`으로 구분, 시즌 전체 순위는 한 사람당 최고 1개(`seasonRanking`). 날짜별 보기는 그대로.
 - 오늘의 기수 전역 뒤 다음 행동 2개(`dailyNext`), 한마디 답글 알림(`myReplied` + localStorage `malttuk-gb-seen`), 닉네임 사칭 막기(앱 `IMPERSONATE` + sql/2026-11-14_v3.2.sql `nick_no_staff` not valid).
 - tsconfig lib에 DOM.Iterable 추가 (TS 5.9에서 NodeList 반복 오류).
+
+## v3.3 (1단계) · 기수 대항전 준비 · 새 로비 (2026-11-14)
+- 명세: `docs/V3.3.md`. 이번 단계는 대항전 본체 + 로비. 로그인 · 인사기록카드 · 호봉은 다음 단계(구글 · 카카오 설정 필요, `docs/LOGIN_SETUP.md`).
+- SQL `sql/2026-11-14_v3.3.sql`: cohorts에 kind/no/ribbon/motto/public(대항전 기수는 번호 자동 · 마감 없음), `members`(최대 3곳 · 동기 번호 · 만든 사람 자동 가입), `runs.week` + 한 주 한 판, 뷰 `contest_board`(기수에 들어온 뒤 끝낸 판만, 상위 3명 평균 + 4번째부터 +5 최대 +50), `contest_results`(주별 순위, 2명 이상), `team_honors`(끝난 주의 참가 · 입상 · 우승), `profiles.main_cohort`.
+- 엔진: `engine/contest.ts`(weekOf · weekNo · teamScore, 첫 회차 11/30). 대항전 판은 `GameState.mode='contest'`, `week`, 세상 시드 = keyRng('malttuk-contest', 월요일), 잠재력 A. 저장 칸 `malttuk-contest-v1`.
+- 화면: `ui/contest.ts`(대항전 #/contest, 기수 만들기 #/contest/new, 대항전 기수 페이지, 표창장 #/award/코드/주, 로비 대항전 문서, 전역 화면 팀 반영, 랭킹 닉네임 옆 약장 `teamTag`), `ui/teamRibbon.ts`(바탕 8 × 모양 6 × 색 5, 별 동 · 은 · 금 + 금테).
+- 로비: 내 카드 한 줄 + 모드 타일 3개(매일 · 매주 · 언제나) + 고른 모드 문서(그 모드 순위 1~3위). 아래 바는 진행 중인 판이 있을 때만.
+- QA: `qa/contest.mjs`(12/2로 시계 고정, 가짜 대항전 응답), smoke는 탭을 먼저 누르도록 수정.

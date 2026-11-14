@@ -276,8 +276,10 @@ export interface GameState {
   /** 캐릭터 생성 때 다시 뽑기 수 / 잠재력 범위 봤는지 */
   creation?: { rerolls: number; viewed: boolean };
   /** 오늘의 기수: 날짜(KST). 세상 시드는 seed, 판정 주사위는 rollSeed */
-  mode?: 'daily' | 'cohort';
+  mode?: 'daily' | 'cohort' | 'contest';
   day?: string;
+  /** 대항전: 그 주 월요일. 세상 시드는 주에서 만든다 */
+  week?: string;
   /** 우리 기수 (친구들과 만든 기수) */
   group?: { id: string; code: string; name: string };
   rollSeed?: number;

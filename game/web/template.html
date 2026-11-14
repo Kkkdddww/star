@@ -478,6 +478,69 @@ a.row{color:inherit;text-decoration:none}
 .gbstrip .tx{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#4E5968}.gbstrip .tx b{color:var(--ink)}
 .gbstrip .go{color:var(--olive);font-weight:700;flex-shrink:0}
 .gbstrip .dot{width:7px;height:7px;border-radius:50%;background:#E5483D;flex-shrink:0}
+
+/* v3.3 로비: 내 카드 · 모드 타일 · 모드 문서 */
+.pf{display:flex;align-items:center;gap:12px;margin:0 12px;background:#fff;border-radius:18px;padding:12px 14px;color:inherit;text-decoration:none}
+.pf .g{flex:1;min-width:0}.pf .g b{font-size:15px}.pf .g .s{display:block;font-size:12px;color:var(--sub);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf svg.ins{max-width:46px;height:auto;flex-shrink:0}.pf .ch{color:var(--faint);display:flex}
+.ttag{display:inline-flex;vertical-align:1px;margin-left:5px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 12px 0}
+.tile{background:#fff;border:1.5px solid transparent;border-radius:16px;padding:12px 10px 11px;text-align:left;color:inherit;min-width:0}
+.tile .ic{color:var(--sub);display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600}
+.tile b{display:block;font-size:15px;margin-top:6px;letter-spacing:-.3px;white-space:nowrap}
+.tile .s{display:block;font-size:12px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.on{border-color:var(--olive)}.tile.on .ic{color:var(--olive)}
+.todo{color:var(--olive);font-weight:700}
+.lcard{margin-top:10px}
+.lcard>.hd{padding:18px 20px 0;display:block}
+.lcard .dn{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--faint);font-weight:500;flex-wrap:wrap}
+.lcard .dn b{color:var(--olive);font-weight:700}
+.lcard .tt{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:20px;font-weight:800;letter-spacing:-.4px}
+.lcard .tt em{margin-left:auto;font-style:normal;font-size:12px;font-weight:700;color:var(--olive);background:var(--olive-t);border-radius:999px;padding:4px 9px;white-space:nowrap}
+.lcard .ds{font-size:13px;font-weight:400;letter-spacing:0;color:var(--sub);margin-top:4px}
+.lcard>.bd{padding:10px 20px 18px}
+.lcard .btn{height:48px;font-size:15px;border-radius:14px;margin-top:14px}
+.lk{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--sub)}
+.lk a{color:var(--olive);text-decoration:none;cursor:pointer}
+.lmore{display:flex;justify-content:center;gap:16px;margin:12px 0 0;font-size:13px}
+.lmore a,.lmore button{color:var(--sub);text-decoration:underline;background:none;border:0;padding:4px;cursor:pointer;font-size:13px}
+.lmore span{color:var(--olive);font-weight:700;padding:4px}
+.big{display:flex;align-items:baseline;gap:10px;margin-top:2px}.big b{font-size:34px;font-weight:800;color:var(--olive);letter-spacing:-1px}.big b.sm{font-size:22px;color:var(--sub)}.big .sub{margin-left:auto}
+/* v3.3 대항전 */
+.pg{padding:0 0 130px}
+.secx{margin:20px 18px 8px;font-size:13px;font-weight:700;color:var(--sub);display:flex;justify-content:space-between}
+.trow2{display:flex;align-items:center;gap:10px;padding:10px 0;color:inherit;text-decoration:none}
+.trow2+.trow2{border-top:1px solid var(--line)}
+.trow2 .tn{width:24px;text-align:center;font-weight:700;color:var(--sub);font-size:14px;flex-shrink:0}
+.trow2 .trb{width:46px;display:flex;justify-content:center;flex-shrink:0}
+.trow2 .g{flex:1;min-width:0}.trow2 .g b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.trow2 .g>span{display:block;font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow2 .tsc{text-align:right;flex-shrink:0}.trow2 .tsc b{display:block;font-size:15px}.trow2 .tsc span{font-size:11px;color:var(--faint)}
+.trow2.me{background:var(--olive-t);margin:0 -10px;padding:10px;border-radius:12px}
+.trow2.me+.trow2,.trow2+.trow2.me{border-top:0}
+.thead{display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 20px 20px}
+.thead .tno{font-size:13px;letter-spacing:.6em;color:var(--olive);font-weight:800;padding-left:.6em;margin-top:14px}
+.thead .tnm{font-size:24px;font-weight:900;letter-spacing:-.6px;margin-top:4px}
+.thead .tmt{font-size:15px;color:var(--olive);font-weight:700;margin-top:4px}
+.thead .tmeta{font-size:12px;color:var(--faint);margin-top:8px}
+.who{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px}
+.who+.who{border-top:1px solid var(--line)}
+.who svg.ins{max-width:40px;height:auto}
+.who .g{flex:1;min-width:0}.who .g span{font-size:12px;color:var(--sub);margin-left:4px}
+.who .v{font-weight:700}
+.lbl{font-size:13px;font-weight:700;color:var(--sub);margin:16px 0 8px}
+.sw{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.sw button{aspect-ratio:1;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);padding:0}
+.sw button.on{box-shadow:0 0 0 2px var(--olive)}
+.pat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pat button{border:1.5px solid var(--line);background:#fff;border-radius:12px;height:52px;display:flex;align-items:center;justify-content:center;padding:0}
+.pat button.on{border-color:var(--olive);background:var(--olive-t)}
+.kvt{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:0;padding:0;margin-top:18px;text-align:left;color:inherit}
+.kvt b{display:block;font-size:14px}
+.award{text-align:center;padding:30px 22px 26px}
+.award .ttl{font-size:30px;font-weight:800;letter-spacing:.5em;margin:16px 0 4px;padding-left:.5em}
+.award .abody{font-size:16px;line-height:1.9;margin:20px 0 22px;word-break:keep-all}
+.award .sign{display:flex;align-items:center;justify-content:center;gap:12px;font-size:16px;font-weight:700;margin-top:14px}
+.award .stamp{transform:rotate(-8deg);width:62px;height:62px}
 </style>
 </head>
 <body>

@@ -53,6 +53,10 @@ async function rest<T>(path: string, init: RequestInit = {}, auth = false): Prom
     else if (/row-level security/i.test(body)) hint = ' · 권한 설정 문제';
     else if (/runs_daily_once/i.test(body)) throw new AlreadyError('오늘의 기수는 하루 한 번만 올릴 수 있어요');
     else if (/runs_cohort_once/i.test(body)) throw new AlreadyError('이 기수에는 이미 기록을 올렸어요');
+    else if (/runs_contest_once/i.test(body)) throw new AlreadyError('이번 주 대항전 판은 이미 올렸어요');
+    else if (/3곳까지/.test(body)) throw new Error('기수는 3곳까지 들어갈 수 있어요');
+    else if (/정원이 다/.test(body)) throw new Error('정원 30명이 다 찼어요');
+    else if (/members_pkey|duplicate key/i.test(body) && path.startsWith('members')) throw new Error('이미 들어간 기수예요');
     else if (/guestbook_rate/i.test(body)) throw new Error('1분에 한 번만 쓸 수 있어요');
     else if (/column .* does not exist|Could not find the .* column/i.test(body)) hint = ' · 서버 업데이트(SQL)가 필요해요';
     throw new Error(`서버 오류 ${res.status}${hint}`);
@@ -68,13 +72,13 @@ export interface RunRow {
   ribbons: { id: string; t: number }[]; title: string | null; quote: string | null; rival_result: string | null;
   seed: number | null; choices: { log: unknown[]; card: CardExtra } | null; ended_on: string; created_at: string;
   /** v3: 오늘의 기수 */
-  mode?: 'free' | 'daily' | 'cohort'; day?: string | null; honor?: number | null; cohort_id?: string | null;
+  mode?: 'free' | 'daily' | 'cohort' | 'contest'; day?: string | null; honor?: number | null; cohort_id?: string | null; week?: string | null;
 }
 export interface CardExtra { luck?: { exp: number; hit: number; pct: number } | null; pct: number; same: number; cohort: number; clean: number; awards: number; start: number; end: number; honor: boolean; reason: string }
 export type NewRun = Omit<RunRow, 'id' | 'user_id' | 'ended_on' | 'created_at'>;
 export class AlreadyError extends Error {}
 
-export interface Profile { id: string; nickname: string; equipped_title: string | null }
+export interface Profile { id: string; nickname: string; equipped_title: string | null; main_cohort?: string | null }
 
 export async function getProfile(): Promise<Profile | null> {
   const s = await session();
@@ -139,7 +143,11 @@ export function today(offsetDays = 0, at?: string): string {
 }
 
 // ── 우리 기수 ──
-export interface CohortRow { id: string; code: string; name: string; seed: number; created_by: string; created_at: string; closes_at: string; max_members: number }
+export interface CohortRow {
+  id: string; code: string; name: string; seed: number; created_by: string; created_at: string; closes_at: string; max_members: number;
+  /** v3.3 대항전 기수 (SQL 전에는 없음) */
+  kind?: 'friendly' | 'contest'; no?: number | null; ribbon?: number[] | null; motto?: string | null; public?: boolean;
+}
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export async function createCohort(name: string): Promise<CohortRow> {
   const s = await session();
@@ -154,6 +162,59 @@ export async function createCohort(name: string): Promise<CohortRow> {
 }
 export const getCohort = async (code: string) => (await rest<CohortRow[]>(`cohorts?code=eq.${encodeURIComponent(code.toUpperCase())}&select=*`))[0] ?? null;
 export const cohortRuns = (id: string) => rest<RunRow[]>(`runs?select=${LIST},choices&mode=eq.cohort&cohort_id=eq.${id}&${DORDER}&limit=60`);
+
+// ── v3.3 기수 대항전 ──
+export interface TeamInput { name: string; motto: string; ribbon: number[]; public: boolean }
+export async function createTeam(t: TeamInput): Promise<CohortRow> {
+  const s = await session();
+  for (let i = 0; i < 3; i++) {
+    const code = Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+    try {
+      const rows = await rest<CohortRow[]>('cohorts', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ code, name: t.name, motto: t.motto || null, ribbon: t.ribbon, public: t.public, kind: 'contest', seed: Math.floor(Math.random() * 2e9), created_by: s.user_id }) }, true);
+      return rows[0];
+    } catch (e) { if (i === 2 || !(e instanceof Error) || !/409|duplicate/i.test(e.message)) throw e; }
+  }
+  throw new Error('만들지 못했어요');
+}
+export const updateTeam = (id: string, t: Partial<TeamInput>) => rest(`cohorts?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...t, motto: t.motto === undefined ? undefined : t.motto || null }) }, true);
+export const joinTeam = (cohortId: string) => rest('members', { method: 'POST', body: JSON.stringify({ cohort_id: cohortId }) }, true);
+export const leaveTeam = async (cohortId: string) => rest(`members?cohort_id=eq.${cohortId}&user_id=eq.${(await session()).user_id}`, { method: 'DELETE' }, true);
+export interface MemberRow { cohort_id: string; user_id: string; seq: number; joined_at: string }
+export interface MyTeam extends MemberRow { cohorts: CohortRow }
+/** 내가 들어간 대항전 기수 (로그인 전 익명 계정 포함) */
+export const myTeams = async (): Promise<MyTeam[]> => {
+  const me = myId();
+  if (!me) return [];
+  return rest<MyTeam[]>(`members?user_id=eq.${me}&select=cohort_id,user_id,seq,joined_at,cohorts(*)&order=joined_at.asc`);
+};
+export const teamMembers = (cohortId: string) => rest<MemberRow[]>(`members?cohort_id=eq.${cohortId}&select=cohort_id,user_id,seq,joined_at&order=seq.asc`);
+export const memberCounts = async (ids: string[]): Promise<Record<string, number>> => {
+  if (!ids.length) return {};
+  const rows = await rest<{ cohort_id: string }[]>(`members?cohort_id=in.(${ids.join(',')})&select=cohort_id`);
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.cohort_id] = (out[r.cohort_id] ?? 0) + 1;
+  return out;
+};
+export interface BoardRow { cohort_id: string; week: string; n: number; score: number; name: string; no: number | null; ribbon: number[] | null; code: string; place?: number }
+export const contestBoard = (week: string, limit = 100) => rest<BoardRow[]>(`contest_results?week=eq.${week}&select=*&order=score.desc&limit=${limit}`);
+/** 한 기수의 주별 기록 (연혁) */
+export const teamHistory = (cohortId: string) => rest<BoardRow[]>(`contest_board?cohort_id=eq.${cohortId}&select=*&order=week.desc&limit=60`);
+export const teamPlaces = (cohortId: string) => rest<BoardRow[]>(`contest_results?cohort_id=eq.${cohortId}&select=*&order=week.desc&limit=60`);
+export interface Honors { cohort_id: string; weeks: number; podiums: number; wins: number }
+export const teamHonors = async (ids: string[]): Promise<Honors[]> => (ids.length ? rest<Honors[]>(`team_honors?cohort_id=in.(${ids.join(',')})&select=*`) : []);
+export const publicTeams = () => rest<CohortRow[]>(`cohorts?kind=eq.contest&public=eq.true&select=*&order=created_at.desc&limit=40`);
+/** 그 주 대항전 판 (기수원들) */
+export const weekRuns = (week: string, userIds: string[]) => (userIds.length ? rest<RunRow[]>(`runs?select=${LIST}&mode=eq.contest&week=eq.${week}&user_id=in.(${userIds.join(',')})&${DORDER}&limit=60`) : Promise.resolve([] as RunRow[]));
+/** 닉네임 (프로필) */
+export const nicknames = async (ids: string[]): Promise<Record<string, string>> => {
+  if (!ids.length) return {};
+  const rows = await rest<{ id: string; nickname: string }[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname`);
+  return Object.fromEntries(rows.map((r) => [r.id, r.nickname]));
+};
+/** 랭킹 닉네임 옆 약장: 대표 기수 */
+export interface TeamTag { id: string; main_cohort: string | null; cohorts: { ribbon: number[] | null; no: number | null; name: string } | null }
+export const teamTags = async (ids: string[]): Promise<TeamTag[]> => (ids.length ? rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&main_cohort=not.is.null&select=id,main_cohort,cohorts(ribbon,no,name)`) : []);
+export const setMainTeam = async (cohortId: string | null) => rest(`profiles?id=eq.${(await session()).user_id}`, { method: 'PATCH', body: JSON.stringify({ main_cohort: cohortId }) }, true);
 
 // ── 방명록 ──
 export interface GuestRow { id: number; user_id: string; nickname: string; body: string; reply: string | null; created_at: string }

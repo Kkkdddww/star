@@ -1,6 +1,6 @@
 {
   "name": "malttuk",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "sim": "tsx sim/balance.ts 2000",
     "sim:gen": "tsx sim/gen3.ts 1500",
     "sim:pot": "tsx sim/potvs.ts 150 best",
-    "qa": "node qa/smoke.mjs"
+    "qa": "node qa/smoke.mjs && node qa/contest.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
