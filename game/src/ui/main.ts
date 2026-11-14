@@ -294,7 +294,10 @@ function meCard(best: number): string {
   const hb = st?.state === 'ok' && st.data ? hobongOf(st.data.xp) : null;
   const runs = st?.state === 'ok' && st.data ? st.data.runs : meta.runs ?? 0;
   if (st?.state === 'ok' && st.data) best = Math.max(best, st.data.best_rank);
-  return `<a class="pf" href="#/p/me">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${hb ? `<span class="hb">${hb.level}호봉</span>` : ''}${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${runs}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span>${hb ? `<span class="xpbar" style="height:4px;margin-top:6px;display:block"><i style="width:${Math.round((hb.into / hb.need) * 100)}%"></i></span>` : ''}</span><span class="ch">${icon('chev')}</span></a>`;
+  const lv = hb ?? { level: 1, into: 0, need: 200 };
+  return `<a class="pf" href="#/p/me"><span class="pfrow">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${runs}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span></span>
+    <span class="hbx"><b>${lv.level}<small>호봉</small></b><span>${hb ? `다음까지 ${lv.need - lv.into}` : '첫 판을 올리면 시작'}</span></span></span>
+    <span class="xpbar"><i style="width:${Math.round((lv.into / lv.need) * 100)}%"></i></span></a>`;
 }
 
 const lrow = (r: RunRow, i: number) => rowHtml(r, i + 1);
