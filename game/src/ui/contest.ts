@@ -220,7 +220,7 @@ export function viewTeam(c: CohortRow): string {
 
   const weekDoc = `<section class="doc lcard"><div class="hd">
     <div class="dn">제${weekNo(week)}주${open ? ` · D-${dLeft()}` : ` · ${md(CONTEST_FROM)} 시작`}</div>
-    <div class="big">${place ? `<b>${place.place}위</b>` : `<b class="sm">${open ? '순위 전' : '출전 대기'}</b>`}${place?.gap !== null && place?.gap !== undefined ? `<span class="sub">3위까지 ${place.gap}점</span>` : ''}</div>
+    <div class="bigrk">${place ? `<b>${place.place}위</b>` : `<b class="sm">${open ? '순위 전' : '출전 대기'}</b>`}${place?.gap !== null && place?.gap !== undefined ? `<span class="sub">3위까지 ${place.gap}점</span>` : ''}</div>
   </div><div class="bd">
     ${score !== null ? `<div class="kv"><span>팀 점수</span><b>${score}</b></div>
     <div class="kv"><span>상위 ${top.length}명 평균</span><b>${Math.round(top.reduce((a, x) => a + x.p, 0) / top.length)}</b></div>

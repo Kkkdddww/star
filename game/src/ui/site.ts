@@ -1,5 +1,6 @@
 import { adSlot } from './ads';
 import { loginInfo, PROVIDER_NAME } from '../net/api';
+import { loginButtons } from './login';
 // 사이트 페이지: 공지·패치노트, 게임 소개, 게임 가이드, 개인정보처리방침, 이용약관, 설정 + 공통 푸터
 const back = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>';
 export const CONTACT_URL = 'https://github.com/Kkkdddww/star/issues';
@@ -116,9 +117,7 @@ function viewSettings(): string {
   const acct = li.linked
     ? `<div class="kv"><span>로그인</span><b class="olive">${PROVIDER_NAME[li.provider!]}로 연결됨</b></div><p class="faint" style="margin-top:6px">기기를 바꿔도 같은 계정으로 로그인하면 기록 · 호봉 · 기수가 이어져요</p>
       <button class="setrow" data-act="auth-logout"><span><b>${settingsState.confirmLogout ? '한 번 더 누르면 로그아웃해요' : '로그아웃'}</b><span>이 기기는 새 익명 계정으로 시작해요. 다시 로그인하면 돌아와요</span></span></button>`
-    : `<p class="sub" style="margin-bottom:10px"><b>기록 지키기</b> · 지금 기록은 이 기기에만 묶여 있어요. 연결하면 기록 그대로 기기를 바꿔도 이어져요</p>
-      <div class="two"><button class="btn line" style="height:48px;font-size:15px" data-act="auth-link" data-v="google">구글로 연결</button><button class="btn line" style="height:48px;font-size:15px" data-act="auth-link" data-v="kakao">카카오로 연결</button></div>
-      <p class="faint" style="margin-top:12px">다른 기기에서 쓰던 계정이 있나요? <button class="link" data-act="auth-signin" data-v="google">구글로 로그인</button> · <button class="link" data-act="auth-signin" data-v="kakao">카카오로 로그인</button></p>`;
+    : `<p class="sub" style="margin-bottom:12px">지금 기록은 이 기기에만 묶여 있어요. 로그인하면 기록 그대로 기기를 바꿔도 이어져요</p>${loginButtons()}`;
   return wrap('설정', `<section class="doc" style="margin:0 0 10px"><div class="hd"><span>계정</span></div><div class="bd">
       ${acct}
       ${settingsState.authMsg ? `<p class="small" style="margin-top:8px;color:var(--red)">${settingsState.authMsg}</p>` : ''}

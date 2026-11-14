@@ -26,6 +26,7 @@ import { adSlot, initRewarded, mountAds, rewardedOn, showRewarded } from './ads'
 import { NOTICES, applySettings, footer, hasNewNotice, reduceMotion, setReduceMotion, settingsState } from './site';
 import { guestPreview, gs, cohortCached, cohortOpen, inviteData, rememberCohort } from './group';
 import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk, routeOf, rowHtml, saveNickname, setRerender, viewRoute, type CardData } from './social';
+import { loginState } from './login';
 import { forgetPeople, contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
 import { randomRibbon, teamRibbon } from './teamRibbon';
 import { AlreadyError, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
@@ -275,6 +276,12 @@ function lobbyTab(): LobbyTab {
   return t;
 }
 
+/** 로그인 권유 한 줄 (연결 전에만): 로비 · 전역 화면 */
+function loginRow(): string {
+  if (loginInfo().linked) return '';
+  return `<a class="loginrow" href="#/login"><span class="tx"><b>로그인하고 기록 지키기</b>기기를 바꿔도 호봉 · 기수 · 기록이 이어져요</span><span class="go">구글 · 카카오</span></a>`;
+}
+
 /** 로비 맨 위: 내 카드 한 줄 (v3.3 인사기록카드 입구) */
 function meCard(best: number): string {
   // 서버 기록이 있으면 최고 계급은 서버 기준
@@ -288,7 +295,10 @@ function meCard(best: number): string {
   const hb = st?.state === 'ok' && st.data ? hobongOf(st.data.xp) : null;
   const runs = st?.state === 'ok' && st.data ? st.data.runs : meta.runs ?? 0;
   if (st?.state === 'ok' && st.data) best = Math.max(best, st.data.best_rank);
-  return `<a class="pf" href="#/p/me">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${hb ? `<span class="hb">${hb.level}호봉</span>` : ''}${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${runs}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span>${hb ? `<span class="xpbar" style="height:4px;margin-top:6px;display:block"><i style="width:${Math.round((hb.into / hb.need) * 100)}%"></i></span>` : ''}</span><span class="ch">${icon('chev')}</span></a>`;
+  const lv = hb ?? { level: 1, into: 0, need: 200 };
+  return `<a class="pf" href="#/p/me"><span class="pfrow">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${runs}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span></span>
+    <span class="hbx"><b>${lv.level}<small>호봉</small></b><span>${hb ? `다음까지 ${lv.need - lv.into}` : '첫 판을 올리면 시작'}</span></span></span>
+    <span class="xpbar"><i style="width:${Math.round((lv.into / lv.need) * 100)}%"></i></span></a>`;
 }
 
 const lrow = (r: RunRow, i: number) => rowHtml(r, i + 1);
@@ -354,7 +364,7 @@ function viewLobby(): string {
     ${guestPreview()}
     <main class="stack" style="padding-bottom:${primary ? 120 : 32}px">
       ${meCard(best)}
-      ${!loginInfo().linked && (meta.runs ?? 0) > 0 ? `<a class="loginrow" href="#/settings"><span class="tx"><b>기록 지키기</b> · 기기를 바꿔도 이어져요</span><span class="go">구글 · 카카오 ›</span></a>` : ''}
+      ${loginRow()}
       <div class="tiles">
         ${tile('d', 'calendar', '매일', '오늘의 기수', dSub)}
         ${tile('c', 'people', '매주', '대항전', cSub)}
@@ -1244,6 +1254,7 @@ function viewEnding(g: GameState): string {
     ${contest && save!.runId ? contestAfter(g.week!) : ''}
     ${group && save!.runId ? `<a class="newnote" style="margin:0 0 12px" href="#/c/${g.group!.code}"><span class="nb">순위</span><span><b>${esc(g.group!.name)} 순위 보기</b><span>동기들과의 갈림길, 기수 시상</span></span>${icon('chev')}</a>` : ''}
     ${uploadBox()}
+    ${save!.runId ? `<div style="margin:-2px -12px 12px">${loginRow()}</div>` : ''}
     ${dailyBox}
     ${daily && save!.runId ? dailyNext() : ''}
     ${hs ? `<p class="sec">명예 점수 ${hs.total}</p><div class="doc" style="margin:0"><div class="bd" style="padding-top:16px">${hs.parts.map((x) => `<div class="kv"><span>${x.label}</span><b>${x.v > 0 ? '+' : ''}${x.v}</b></div>`).join('')}<p class="faint" style="margin-top:6px">같은 계급이면 명예 점수가 높은 사람이 앞서요</p></div></div>` : ''}
@@ -1573,7 +1584,7 @@ root.addEventListener('click', (e) => {
     }
     case 'team-new': {
       if ((myTeamsNow()?.length ?? 0) >= MAX_TEAMS) { toast(`기수는 ${MAX_TEAMS}곳까지 들어갈 수 있어요`); break; }
-      if (!loginInfo().linked) { toast('기수 만들기는 로그인이 필요해요 · 기수장 자리를 지켜 줘요'); location.hash = '#/settings'; break; }
+      if (!loginInfo().linked) { toast('기수 만들기는 로그인이 필요해요 · 기수장 자리를 지켜 줘요'); location.hash = '#/login'; break; }
       Object.assign(cs, { name: '', motto: '', ribbon: randomRibbon(), pub: true, msg: '', busy: false, edit: null });
       location.hash = '#/contest/new'; break;
     }
@@ -1749,11 +1760,8 @@ root.addEventListener('click', (e) => {
     case 'open-card': location.hash = `#/card/${v}`; break;
     case 'open-person': location.hash = `#/p/${v}`; break;
     // v3.3 로그인
-    case 'auth-link': settingsState.authMsg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
-    case 'auth-signin': {
-      if (!confirm('다른 기기에서 쓰던 계정으로 로그인할까요? 이 기기에서 연결하지 않고 쌓은 서버 기록은 그 계정으로 옮겨지지 않아요.')) break;
-      track('login_signin', { provider: v }); signInProvider(v as Provider); break;
-    }
+    case 'auth-link': settingsState.authMsg = ''; loginState.msg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = loginState.msg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
+    case 'auth-signin': loginState.conflict = null; track('login_signin', { provider: v }); signInProvider(v as Provider); break;
     case 'auth-logout': {
       if (!settingsState.confirmLogout) { settingsState.confirmLogout = true; render(); break; }
       logout(); invalidate(''); forgetPeople(); ui.lobbyTab = null; settingsState.confirmLogout = false; toast('로그아웃했어요'); location.hash = ''; break;
@@ -1835,9 +1843,9 @@ prefillGuest();
 applySettings();
 // v3.3 로그인 화면에서 돌아왔으면 토큰 저장
 const authBack = consumeAuthReturn();
-if (authBack) { ui.route = null; invalidate(''); }
+if (authBack) { ui.route = null; invalidate(''); if (authBack.conflict) { loginState.conflict = authBack.conflict; location.hash = '#/login'; ui.route = { name: 'login' }; } else if (!authBack.ok) loginState.msg = authBack.msg ?? ''; }
 render();
 if (authBack) {
   track(authBack.ok ? 'login_ok' : 'login_fail', { kind: authBack.kind });
-  toast(authBack.ok ? (authBack.kind === 'link' ? '연결했어요 · 이제 기기를 바꿔도 기록이 이어져요' : '로그인했어요') : authBack.msg ?? '로그인하지 못했어요');
+  if (!authBack.conflict) toast(authBack.ok ? (authBack.kind === 'link' ? '로그인했어요 · 이제 기기를 바꿔도 기록이 이어져요' : '로그인했어요') : authBack.msg ?? '로그인하지 못했어요');
 }
