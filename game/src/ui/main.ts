@@ -8,7 +8,7 @@ import { advanceYear, careerYear, decide, newGame, retire, rivalOf, setPolicy, s
 import { branchFits, overall } from '../engine/growth';
 import { earnedRibbons, earnedTitles, honorScore, RIBBONS, TITLES, titleName, type Earned } from '../engine/meta';
 import { initAnalytics, track } from '../net/analytics';
-import { baseStats, fixedPotential, makeCandidates, POT_DAY_LABEL, potentialRange, type Candidate } from '../engine/candidates';
+import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, type Candidate } from '../engine/candidates';
 import { asg, assignmentsFor, isRequired, lacksRequired, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
 import { RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
@@ -188,7 +188,7 @@ function viewCands(): string {
     <div class="pad tight" style="padding-bottom:170px">
     <p class="kicker">${p.daily ? `오늘의 기수 · ${dayLabel(p.daily)}` : p.group ? `우리 기수 · ${esc(p.group.name)}` : '지원서'} · ${esc(p.name.trim() || '지원자')}</p>
     <h1 class="h1">어떤 장교로<br>시작할까요?</h1>
-    <p class="sub">${p.daily ? '오늘 입대한 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : p.group ? '이 기수 동기 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : '세 후보는 능력치 총합이 같아요. 출신과 분포만 달라요.'} ${p.fixedPot ? `이번 기수는 세 후보 모두 잠재력 ${p.fixedPot}예요. 선택으로 겨뤄요.` : '잠재력은 졸업할 때 교관 평가서로 확인할 수 있어요.'}</p>
+    <p class="sub">${p.daily ? '오늘 입대한 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : p.group ? '이 기수 동기 모두에게 똑같은 세 후보예요. 다시 뽑기는 없어요.' : '세 후보는 능력치 총합이 같아요. 출신과 분포만 달라요.'} ${p.fixedPot ? `난이도 ${DIFFICULTY[p.fixedPot]} · 세 후보 모두 잠재력 ${p.fixedPot}예요. 선택으로 겨뤄요.` : '잠재력은 졸업할 때 교관 평가서로 확인할 수 있어요.'}</p>
     ${p.cands.map(card).join('')}
     ${fixedWorld(p) ? '' : `<div class="ctools one">
       <button class="ctool" data-act="p-reroll" ${left > 0 ? '' : 'disabled'}><b>${icon('swap', 16)} 후보 다시 뽑기</b><span class="${left > 0 ? 'free' : ''}">${ui.adBusy ? '광고 불러오는 중…' : left > 0 ? `${rewardedOn() ? '광고 보고' : '무료'} · ${left}회 남음` : '이번 판 다 썼어요'}</span></button>
@@ -250,7 +250,7 @@ function viewLobby(): string {
   const track = `<div class="steps"><div class="fillbar" style="width:calc((100% - 28px) * ${Math.max(0, cur) / (STEPS.length - 1)})"></div>${STEPS.map(([l, i], k) => `<div class="st ${best >= i ? 'on' : ''} ${k === cur ? 'cur' : ''}"><i></i><span>${l}</span></div>`).join('')}</div>`;
   const d = dailyState(), c = groupState();
   const dg = d.save?.game;
-  const dailySub = d.st === 'playing' ? `진행 중 · ${dg!.me.rank} ${esc(dg!.me.name)}` : d.st === 'ended' ? '전역했어요 · 결과를 올려 주세요' : d.st === 'uploaded' ? `${dg!.me.rank} 전역 · 내일 새 기수가 열려요` : (() => { const fp = fixedPotential(today()); return fp ? `오늘은 ${fp} 기수 · ${POT_DAY_LABEL[fp]}` : '모두 같은 출발선'; })();
+  const dailySub = d.st === 'playing' ? `진행 중 · ${dg!.me.rank} ${esc(dg!.me.name)}` : d.st === 'ended' ? '전역했어요 · 결과를 올려 주세요' : d.st === 'uploaded' ? `${dg!.me.rank} 전역 · 내일 새 기수가 열려요` : (() => { const fp = fixedPotential(today()); return fp ? `모두 같은 출발선 · 난이도 ${DIFFICULTY[fp]}` : '모두 같은 출발선'; })();
   const cg = c.save?.game;
   const groupSub = c.st === 'playing' ? `진행 중 · ${esc(cg!.group!.name)}` : c.st === 'ended' ? `${esc(cg!.group!.name)} · 결과를 올려 주세요` : '친구와 같은 출발선 · 7일 동안';
   const freeSub = live ? `진행 중 · ${live.me.rank} ${esc(live.me.name)} · ${live.year}년` : '연습 · 약장 모으기 · 다시 뽑기 2회';
@@ -370,7 +370,7 @@ function viewGrad(): string {
     <p class="sec">라이벌</p>
     <div class="rival"><div class="vs">VS</div><div><b>${esc(rivalName.name)}</b><p class="sub small">${rivalName.line} · 석차가 가장 비슷했던 동기예요</p></div></div>
     <p class="sec">교관 평가서</p>
-    ${p.fixedPot ? `<div class="doc" style="margin:0"><div class="bd"><div class="kv"><span>잠재력</span><b class="olive">${p.fixedPot}등급</b></div><p class="faint" style="margin-top:8px">이번 기수 동기는 모두 잠재력 ${p.fixedPot}예요. 순위는 선택으로 갈려요.</p></div></div>`
+    ${p.fixedPot ? `<div class="doc" style="margin:0"><div class="bd"><div class="kv"><span>잠재력</span><b class="olive">${p.fixedPot}등급</b></div><p class="faint" style="margin-top:8px">난이도 ${DIFFICULTY[p.fixedPot]} · 이번 기수 동기는 모두 잠재력 ${p.fixedPot}예요. 순위는 선택으로 갈려요.</p></div></div>`
       : p.range ? `<div class="doc" style="margin:0"><div class="bd"><div class="kv"><span>잠재력 범위</span><b class="olive">${p.range}</b></div><p class="faint" style="margin-top:8px">범위는 진짜 등급을 반드시 포함해요. 범위를 봐도 잠재력은 바뀌지 않아요.</p></div></div>`
       : `<button class="row" data-act="p-view"><div class="mark gray">${icon('file')}</div><div class="g"><b>교관 평가서 열어 보기</b><span>${ui.adBusy ? '광고 불러오는 중…' : `잠재력 범위를 확인해요 · ${rewardedOn() ? '광고 보고' : '무료'} 1회`}</span></div>${icon('chev')}</button>`}
   </div>
