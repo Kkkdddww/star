@@ -3,7 +3,7 @@ import { CHOICE_BY_ID } from '../data/choices';
 import { RANKS } from '../data/config';
 import { deskText } from '../engine/choice';
 import type { Rank } from '../engine/types';
-import { cohortRuns, getCohort, guestbook, myId, myReplied, type CohortRow, type GuestRow, type RunRow } from '../net/api';
+import { amIAdmin, cohortRuns, getCohort, guestbook, myId, myReplied, type CohortRow, type GuestRow, type RunRow } from '../net/api';
 import { errorBox, header, load, loadingBox, rowHtml } from './social';
 import { insignia } from './insignia';
 import { viewTeam } from './contest';
@@ -12,7 +12,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const chev = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /** 입력 상태 (main.ts가 이벤트를 처리한다) */
-export const gs = { name: '', code: '', msg: '', busy: false, gbText: '', gbNick: '', gbMsg: '', gbBusy: false };
+export const gs = { name: '', code: '', msg: '', busy: false, gbText: '', gbNick: '', gbMsg: '', gbBusy: false, replyId: 0, replyText: '', replyBusy: false };
 
 // ── 내가 만든·들어간 기수 목록 (이 기기) ──
 const MY_KEY = 'malttuk-my-cohorts';
@@ -152,10 +152,14 @@ const ago = (t: string) => {
   const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000);
   return m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`;
 };
-const gbItem = (g: GuestRow, actions = true) => `<div class="gb">
-    <div class="gh"><b>${esc(g.nickname)}</b><span>${ago(g.created_at)}</span>${actions && g.user_id !== myId() ? `<button class="gr" data-act="gb-report" data-v="${g.id}">신고</button>` : ''}</div>
+const gbItem = (g: GuestRow, actions = true, admin = false) => `<div class="gb ${g.hidden ? 'gbhid' : ''}">
+    <div class="gh"><b>${esc(g.nickname)}</b><span>${ago(g.created_at)}${admin && g.hidden ? ' · <b class="red">가려짐</b>' : admin && g.reports ? ` · 신고 ${g.reports}` : ''}</span>${actions && !admin && g.user_id !== myId() ? `<button class="gr" data-act="gb-report" data-v="${g.id}">신고</button>` : ''}</div>
     <p>${esc(g.body)}</p>
-    ${g.reply ? `<div class="rep"><b>개발자 동우캉</b><p>${esc(g.reply)}</p></div>` : ''}
+    ${admin && gs.replyId === g.id ? `<div class="rep"><b>개발자 답글</b>
+      <textarea id="gbreply" class="inp" style="background:#fff;height:76px;margin-top:6px;padding:10px 12px;resize:none" maxlength="300" placeholder="답글 (비우고 저장하면 지워져요)">${esc(gs.replyText)}</textarea>
+      <div class="two" style="margin-top:8px"><button class="btn line" style="height:40px;font-size:14px" data-act="gb-reply-cancel">취소</button><button class="btn" style="height:40px;font-size:14px" data-act="gb-reply-save" data-v="${g.id}" ${gs.replyBusy ? 'disabled' : ''}>${gs.replyBusy ? '저장 중…' : '답글 저장'}</button></div></div>`
+    : g.reply ? `<div class="rep"><b>개발자 동우캉</b><p>${esc(g.reply)}</p></div>` : ''}
+    ${admin && gs.replyId !== g.id ? `<p class="gbadm"><button data-act="gb-reply-open" data-v="${g.id}">${g.reply ? '답글 고치기' : '답글 쓰기'}</button><button data-act="gb-hide" data-v="${g.id}" data-h="${g.hidden ? '0' : '1'}">${g.hidden ? '다시 보이기' : '가리기'}</button></p>` : ''}
   </div>`;
 
 const SEEN_KEY = 'malttuk-gb-seen';
@@ -169,15 +173,19 @@ function unseenReplies(): number[] {
   return st.data.filter((id) => !seen.includes(id));
 }
 
+/** 개발자(관리자)면 답글 · 가리기 버튼이 보여요 */
+const adminL = () => load('gb:admin', amIAdmin);
 export function viewGuestbook(): string {
   const mine = myId() ? load('gb:mine', myReplied) : null;
   if (mine?.state === 'ok' && unseenReplies().length) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(mine.data)); } catch { /* 저장 못 해도 화면은 그대로 */ } }
-  const st = load('gb:list', () => guestbook(40));
+  const adm = adminL();
+  const admin = adm.state === 'ok' && adm.data;
+  const st = load(`gb:list:${admin ? 'a' : 'u'}`, () => guestbook(admin ? 60 : 40, admin));
   let list = '';
   if (st.state === 'loading') list = loadingBox;
   else if (st.state === 'error') list = errorBox(st.msg);
   else if (!st.data.length) list = '<div class="doc"><div class="bd" style="padding-top:20px"><p class="sub">아직 글이 없어요. 첫 한마디를 남겨 주세요.</p></div></div>';
-  else list = `<div class="doc" style="margin:0"><div class="bd" style="padding:4px 16px">${st.data.map((g) => gbItem(g)).join('')}</div></div>`;
+  else list = `${admin ? `<p class="faint" style="margin:0 4px 8px">개발자 모드 · 답글 ${st.data.filter((g) => !g.reply).length}개 안 달림 · 가려진 글 ${st.data.filter((g) => g.hidden).length}개</p>` : ''}<div class="doc" style="margin:0"><div class="bd" style="padding:4px 16px">${st.data.map((g) => gbItem(g, true, !!admin)).join('')}</div></div>`;
   return `<div class="page">${header('개발자한테 한마디')}<main class="pad tight" style="padding-top:8px">
     <section class="doc" style="margin:0 0 12px"><div class="bd" style="padding-top:16px">
       <input id="gbnick" class="inp" style="height:46px;background:var(--bg)" maxlength="12" placeholder="닉네임" value="${esc(gs.gbNick)}">

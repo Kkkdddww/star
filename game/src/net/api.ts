@@ -339,14 +339,22 @@ export const sameNickCount = async (nick: string) => {
 };
 
 // ── 방명록 ──
-export interface GuestRow { id: number; user_id: string; nickname: string; body: string; reply: string | null; created_at: string }
+export interface GuestRow { id: number; user_id: string; nickname: string; body: string; reply: string | null; created_at: string; hidden?: boolean; reports?: number }
 /** v3.2 내 한마디 중 답글이 달린 것 (로비 띠 알림 점) */
 export const myReplied = async (): Promise<number[]> => {
   const me = myId();
   if (!me) return [];
   return (await rest<{ id: number }[]>(`guestbook?select=id&user_id=eq.${me}&reply=not.is.null&order=id.desc&limit=50`)).map((r) => r.id);
 };
-export const guestbook = (limit = 30) => rest<GuestRow[]>(`guestbook?select=id,user_id,nickname,body,reply,created_at&order=created_at.desc&limit=${limit}`);
+export const guestbook = (limit = 30, asAdmin = false) => rest<GuestRow[]>(`guestbook?select=id,user_id,nickname,body,reply,created_at${asAdmin ? ',hidden,reports' : ''}&order=created_at.desc&limit=${limit}`, {}, asAdmin);
+/** v3.3.2 개발자(관리자)인지: 로그인(연결)한 계정만 물어본다. SQL 전이면 false */
+export async function amIAdmin(): Promise<boolean> {
+  if (!myId() || !loginInfo().linked) return false;
+  try { return (await rest<boolean>('rpc/is_admin', { method: 'POST', body: '{}' }, true)) === true; } catch { return false; }
+}
+/** 관리자: 답글 쓰기 · 고치기 (빈 글이면 지움), 가리기 · 다시 보이기 */
+export const replyGuest = (id: number, reply: string) => rest(`guestbook?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ reply: reply.trim() || null }) }, true);
+export const hideGuest = (id: number, hidden: boolean) => rest(`guestbook?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ hidden }) }, true);
 export async function writeGuest(nickname: string, body: string): Promise<void> {
   const s = await session();
   await rest('guestbook', { method: 'POST', body: JSON.stringify({ user_id: s.user_id, nickname, body }) }, true);
