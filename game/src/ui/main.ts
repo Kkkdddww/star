@@ -94,7 +94,7 @@ const persistMeta = () => write(META_KEY, meta);
 type Screen = 'medal' | 'lobby' | 'p-intro' | 'p-cands' | 'p-envelope' | 'p-focus' | 'p-school' | 'p-grad' | 'p-commission'
   | 'home' | 'desk' | 'progress' | 'result' | 'promotion' | 'promo-ceremony' | 'wish' | 'order' | 'policy' | 'assign-ceremony' | 'ending';
 type Tab = 'home' | 'record' | 'cohort' | 'dex';
-type Sheet = null | 'focus' | 'retire' | 'reset' | 'ad' | 'title';
+type Sheet = null | 'focus' | 'retire' | 'reset' | 'ad' | 'title' | 'post';
 
 interface Prologue {
   name: string; origin: Origin; potential: Potential; seed: number;
@@ -536,24 +536,8 @@ function serviceCard(g: GameState): string {
   </section>`;
 }
 
-function deskBlock(g: GameState): string {
-  if (!g.desk) return '';
-  const r0 = g.desk.results[0];
-  const it0 = g.desk.items[0];
-  const def0 = CHOICE_BY_ID[it0.defId];
-  const t0 = deskText(it0.defId, it0.v);
-  const body = r0
-    ? `<div class="done"><div class="mark ${r0.success ? '' : 'red'}">${icon('pen')}</div><div class="g"><b>${r0.title}</b><span>${r0.label} · ${r0.success ? '성공' : '실패'} · ${esc(r0.outcome.text)}</span></div></div>`
-    : `<button class="pending" data-act="open-desk" data-v="0"><div class="g"><span class="chip">${def0.type}</span><b>${t0.title}</b></div>${icon('chev')}</button>`;
-  return `
-  <section class="doc">
-    <div class="hd"><span>결재함</span><em>${r0 ? '처리 완료' : '대기 1건'}</em></div>
-    <div class="bd">${body}<p class="faint" style="margin-top:10px">${g.desk.items.length > 1 ? '7월에 결재가 한 건 더 올라와요' : ''}</p></div>
-  </section>`;
-}
-
 // ── 터닝포인트: 집중 육성을 바꿀 때를 알려 준다 ──
-interface TurningPoint { key: string; title: string; body: string; rec: [StatKey, StatKey] }
+interface TurningPoint { key: string; title: string; short: string; body: string; rec: [StatKey, StatKey] }
 function turningPoint(g: GameState): TurningPoint | null {
   if (!g.desk || g.history.length === 0) return null;
   const me = g.me;
@@ -568,28 +552,15 @@ function turningPoint(g: GameState): TurningPoint | null {
     return first ? [first, pool[0]] : [pool[0], pool[1]];
   };
   const cands: TurningPoint[] = [];
-  if (me.yearsInRank === 0 && me.rank !== '소위') cands.push({ key: `promo:${me.rank}`, title: `${me.rank} 진급, 군 생활의 터닝포인트`, body: `계급이 오르면 심사 기준도 달라져요. 가장 약한 ${STAT_LABEL[lows[0]]}부터 채우면 역량 균형 점수가 올라요.`, rec: recFor() });
-  if (me.yearsInAssignment === 0 && isRequired(me, a.id)) cands.push({ key: `post:${g.year}:${a.id}`, title: `새 보직 ${a.name}, 집중 육성을 바꿀 때예요`, body: `${STAT_LABEL[a.grows[0]]}·${STAT_LABEL[a.grows[1]]}는 보직에서 저절로 자라요. 집중 육성은 부족한 쪽에 두면 고르게 커요.`, rec: recFor() });
-  if (me.age >= 35 && !focus.includes('fitness')) cands.push({ key: 'age35', title: '체력이 떨어지기 시작하는 나이예요', body: '35세부터는 집중하지 않으면 체력이 해마다 조금씩 줄어요.', rec: recFor('fitness') });
-  if (gap(lows[0]) <= -12) cands.push({ key: `bal:${me.rank}`, title: '역량 균형 경고', body: `${STAT_LABEL[lows[0]]}이(가) ${me.rank} 평균보다 ${-Math.round(gap(lows[0]))} 낮아요. 진급 점수의 15%가 균형에서 나와요.`.replace('이(가)', hasJong(STAT_LABEL[lows[0]]) ? '이' : '가'), rec: recFor(lows[0]) });
+  if (me.yearsInRank === 0 && me.rank !== '소위') cands.push({ key: `promo:${me.rank}`, short: `${me.rank} 진급 · 육성 다시 짤 때`, title: `${me.rank} 진급, 군 생활의 터닝포인트`, body: `계급이 오르면 심사 기준도 달라져요. 가장 약한 ${STAT_LABEL[lows[0]]}부터 채우면 역량 균형 점수가 올라요.`, rec: recFor() });
+  if (me.yearsInAssignment === 0 && isRequired(me, a.id)) cands.push({ key: `post:${g.year}:${a.id}`, short: '새 보직 · 육성 다시 짤 때', title: `새 보직 ${a.name}, 집중 육성을 바꿀 때예요`, body: `${STAT_LABEL[a.grows[0]]}·${STAT_LABEL[a.grows[1]]}는 보직에서 저절로 자라요. 집중 육성은 부족한 쪽에 두면 고르게 커요.`, rec: recFor() });
+  if (me.age >= 35 && !focus.includes('fitness')) cands.push({ key: 'age35', short: '35세 · 체력 관리 시작', title: '체력이 떨어지기 시작하는 나이예요', body: '35세부터는 집중하지 않으면 체력이 해마다 조금씩 줄어요.', rec: recFor('fitness') });
+  if (gap(lows[0]) <= -12) cands.push({ key: `bal:${me.rank}`, short: `역량 균형 경고 · ${STAT_LABEL[lows[0]]}`, title: '역량 균형 경고', body: `${STAT_LABEL[lows[0]]}이(가) ${me.rank} 평균보다 ${-Math.round(gap(lows[0]))} 낮아요. 진급 점수의 15%가 균형에서 나와요.`.replace('이(가)', hasJong(STAT_LABEL[lows[0]]) ? '이' : '가'), rec: recFor(lows[0]) });
   if (save!.tpLast !== undefined && g.year - save!.tpLast < 4) return null;
   const tp = cands.find((c) => !seen.includes(c.key));
   if (!tp) return null;
   if (tp.rec[0] === tp.rec[1] || (focus.includes(tp.rec[0]) && focus.includes(tp.rec[1]))) return null;
   return tp;
-}
-
-function tpCard(g: GameState): string {
-  const tp = turningPoint(g);
-  if (!tp) return '';
-  return `
-  <section class="tp" data-key="${tp.key}">
-    <div class="tp-top"><span class="tp-badge">${icon('target', 14)} 터닝포인트</span></div>
-    <b>${tp.title}</b>
-    <p>${tp.body}</p>
-    <p class="tp-rec">추천 집중 육성 · <b>${STAT_LABEL[tp.rec[0]]}, ${STAT_LABEL[tp.rec[1]]}</b></p>
-    <div class="two"><button class="btn quiet" style="height:48px" data-act="tp-dismiss" data-v="${tp.key}">지금은 괜찮아요</button><button class="btn" style="height:48px" data-act="tp-open" data-v="${tp.key}" data-r="${tp.rec.join(',')}">집중 육성 바꾸기</button></div>
-  </section>`;
 }
 
 function viewHome(g: GameState): string {
@@ -598,48 +569,63 @@ function viewHome(g: GameState): string {
   const a = asg(me.assignmentId);
   const focus = save!.focus;
   const rival = rivalOf(g);
-  const row = (act: string, mk: string, cls: string, title: string, sub: string) =>
-    `<button class="row" data-act="${act}"><div class="mark ${cls}">${icon(mk)}</div><div class="g"><b>${title}</b><span>${sub}</span></div>${act === 'noop' ? '' : icon('chev')}</button>`;
-  const plan: string[] = [];
-  if (up.promotion) plan.push(row('noop', 'up', 'amber', `${up.promotion.to} 진급 심사`, `${up.promotion.attempt}차 · 기회 ${up.promotion.tries}번 중`));
-  if (up.longService) plan.push(row('noop', 'shield', 'amber', '장기복무 선발', up.longService === 2 ? '마지막 기회예요' : '지금까지의 평정 평균이 반영돼요'));
-  if (up.education) plan.push(row('noop', 'book', 'gray', `${up.education} 입교`, '전문성이 석차를 좌우해요'));
-  if (up.reassign) plan.push(row('noop', 'swap', 'gray', '정기 인사', '연말에 희망 조사가 있어요'));
-  if (lacksRequired(me)) plan.push(row('noop', 'alert', 'amber', `필수 보직: ${REQUIRED_BILLET[me.rank]!.label}`, '거치지 않으면 다음 진급 심사를 받을 수 없어요'));
-  const diff = rankCount(rival.rank) - rankCount(me.rank);
-  const rivalState = !rival.active ? '전역했어요' : diff > 0 ? `나보다 ${diff}계급 위` : diff < 0 ? `나보다 ${-diff}계급 아래` : '나와 같은 계급';
+  // v3.4 UI: 한 줄 = 제목 + 설명 한 줄. 해야 할 일에는 빨간 점, 자세한 건 눌러서
+  const row = (act: string, mk: string, cls: string, title: string, sub: string, o: { dot?: boolean; v?: string; r?: string } = {}) =>
+    `<button class="row todo" data-act="${act}"${o.v ? ` data-v="${o.v}"` : ''}${o.r ? ` data-r="${o.r}"` : ''}><div class="mark ${cls}">${icon(mk)}</div><div class="g"><b>${title}${o.dot ? '<i class="dot"></i>' : ''}</b><span>${sub}</span></div>${act === 'noop' ? '' : icon('chev')}</button>`;
+  const todo: string[] = [];
+  if (g.desk) {
+    const r0 = g.desk.results[0];
+    const it0 = g.desk.items[0];
+    const more = g.desk.items.length > 1 ? ' · 7월에 1건 더' : '';
+    todo.push(r0
+      ? row('noop', 'pen', r0.success ? 'gray' : 'red', `결재 처리 · ${r0.success ? '성공' : '실패'}`, `${r0.title}${more}`)
+      : row('open-desk', 'pen', '', '결재 대기 1건', `${CHOICE_BY_ID[it0.defId].type} · ${deskText(it0.defId, it0.v).title}`, { dot: true, v: '0' }));
+  }
+  const tp = turningPoint(g);
+  if (tp) todo.push(row('tp-open', 'target', '', tp.short, `추천 집중 육성 · ${STAT_LABEL[tp.rec[0]]}, ${STAT_LABEL[tp.rec[1]]}`, { dot: true, v: tp.key, r: tp.rec.join(',') }));
+  if (lacksRequired(me)) todo.push(row('noop', 'alert', 'amber', `필수 보직 · ${REQUIRED_BILLET[me.rank]!.label}`, '거쳐야 다음 진급 심사를 받아요'));
+  if (up.promotion) todo.push(row('noop', 'up', 'amber', `${up.promotion.to} 진급 심사`, `올해 말 · ${up.promotion.attempt}차 · 기회 ${up.promotion.tries}번 중`));
+  if (up.longService) todo.push(row('noop', 'shield', 'amber', '장기복무 선발', up.longService === 2 ? '마지막 기회예요' : '지금까지의 평정 평균이 반영돼요'));
+  if (up.education) todo.push(row('noop', 'book', 'gray', `${up.education} 입교`, '전문성이 석차를 좌우해요'));
+  if (up.reassign) todo.push(row('noop', 'swap', 'gray', '정기 인사', '연말에 희망 조사가 있어요'));
+  todo.push(row('open-focus', 'target', 'gray', '집중 육성', `${STAT_LABEL[focus[0]]}, ${STAT_LABEL[focus[1]]}`));
   const risk = me.hidden.risk;
+  if (risk > 0) todo.push(row('noop', 'alert', 'amber', `마음에 걸리는 일 ${risk}건`, risk >= 2 ? '언젠가 감사에서 드러날 수 있어요' : '아직은 괜찮아요'));
+  const diff = rankCount(rival.rank) - rankCount(me.rank);
+  const rivalState = !rival.active ? '전역' : diff > 0 ? `나보다 ${diff}계급 위` : diff < 0 ? `나보다 ${-diff}계급 아래` : '나와 같은 계급';
+  const left = g.desk && !g.desk.results[0] ? 1 : 0;
   const ready = !g.desk || g.desk.results[0];
   return `
   ${serviceCard(g)}
-  ${tpCard(g)}
-  ${deskBlock(g)}
-  ${plan.length ? `<section class="doc"><div class="hd"><span>올해 일정</span></div><div class="bd" style="padding-top:4px;padding-bottom:4px">${plan.join('')}</div></section>` : ''}
   <section class="doc">
-    <div class="hd"><span>라이벌</span><em>${rivalState}</em></div>
-    <div class="bd"><div class="svc">
-      <div class="rk">${insignia(rival.rank, 26, false)}<span>${rival.rank}</span></div>
-      <div class="who"><b>${esc(rival.name)}</b> <span class="faint">${rival.origin}</span><p class="sub small">${rival.active ? asg(rival.assignmentId).name : esc(rival.exitReason ?? '전역')} · ${PERSONALITY[rival.personality].line}</p></div>
-    </div></div>
+    <div class="hd"><span>올해 업무</span><em>${g.year}년${left ? ` · 처리할 일 ${left}건` : ''}</em></div>
+    <div class="bd list">${todo.join('')}</div>
   </section>
   <section class="doc">
-    <div class="hd"><span>현재 보직</span><em>임기 2년 중 ${me.yearsInAssignment + 1}년차</em></div>
-    <div class="bd">
-      <div class="kv"><span>보직</span><b>${a.name} <span class="chip gray">${a.kind}</span></b></div>
+    <div class="hd"><span>지금 자리</span><em>임기 2년 중 ${me.yearsInAssignment + 1}년차</em></div>
+    <div class="bd list">
+      ${row('open-post', 'file', 'gray', `${a.name} · ${a.kind}`, me.term ? `임기 목표 · ${goalOf(me.term).text}${me.term.done === true ? ' (달성)' : me.term.done === false ? ' (미달)' : ''}` : `잘 오르는 능력치 · ${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}`)}
+      ${row('noop', 'people', 'gray', `라이벌 ${esc(rival.name)}`, rival.active ? `${rival.rank} · ${asg(rival.assignmentId).name} · ${rivalState}` : esc(rival.exitReason ?? `${rival.rank} 전역`))}
+    </div>
+  </section>
+  <button class="link" data-act="open-retire">전역 지원서 내기</button>
+  <div class="bar withtabs"><button class="btn" data-act="next-year" ${ready ? '' : 'disabled'}>${ready ? `${g.year}년 보내기` : '결재를 먼저 처리해 주세요'}</button></div>`;
+}
+
+/** 지금 자리 자세히 (시트) */
+function postSheet(g: GameState): string {
+  const me = g.me;
+  const a = asg(me.assignmentId);
+  return `<h3 class="h2">${a.name}</h3><p class="sub">${a.kind} · 임기 2년 중 ${me.yearsInAssignment + 1}년차</p>
+    <div class="kvs">
       <div class="kv"><span>잘 오르는 능력치</span><b>${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}</b></div>
       <div class="kv"><span>경력 가치</span><b>${a.kind === '지휘' || a.kind === '요직' ? '<span class="olive">핵심 경력</span>' : '보조 경력'}</b></div>
       <div class="kv"><span>병과 궁합</span><b>${branchFits(me.branch, a) ? '<span class="olive">잘 맞아요 · 성장 +20%</span>' : '보통'}</b></div>
       ${me.policy ? `<div class="kv"><span>지휘 방침</span><b>${me.policy}</b></div>` : ''}
-      ${me.term ? `<div class="kv"><span>부대 · 상관</span><b>${UNITS[me.term.unit].short} · ${BOSSES[me.term.boss].name}</b></div>
-      <div class="kv"><span>임기 목표</span><b>${goalOf(me.term).text} ${me.term.done === true ? '<span class="chip on">달성</span>' : me.term.done === false ? '<span class="chip gray">미달</span>' : ''}</b></div>` : ''}
+      ${me.term ? `<div class="kv"><span>부대 · 상관</span><b>${UNITS[me.term.unit].short} · ${BOSSES[me.term.boss].name}</b></div>` : ''}
     </div>
-    <div style="border-top:1px solid var(--line);padding:0 14px">
-      ${row('open-focus', 'target', '', '집중 육성', `${STAT_LABEL[focus[0]]}, ${STAT_LABEL[focus[1]]}`)}
-      ${risk > 0 ? row('noop', 'alert', 'amber', `마음에 걸리는 일 ${risk}건`, risk >= 2 ? '언젠가 감사에서 드러날 수 있어요' : '아직은 괜찮아요') : ''}
-    </div>
-  </section>
-  <button class="link" data-act="open-retire">전역 지원서 내기</button>
-  <div class="bar withtabs"><button class="btn" data-act="next-year" ${ready ? '' : 'disabled'}>${ready ? `${g.year}년 보내기` : '결재함을 먼저 처리해 주세요'}</button></div>`;
+    ${me.term ? `<div class="note">임기 목표 · <b>${goalOf(me.term).text}</b><br>이루면 평정 가점과 표창, 진급 공적에도 들어가요</div>` : ''}
+    <button class="btn" data-act="close-sheet">닫기</button>`;
 }
 
 const STAT_DESC: Record<StatKey, string> = {
@@ -736,9 +722,13 @@ function sheet(g: GameState | null): string {
   if (ui.sheet === 'focus' && g) {
     const ok = ui.draftFocus.length === 2;
     const rec: StatKey[] = ui.tp?.rec ?? [];
-    body = `<h3 class="h2">집중 육성할 능력치 2개</h3><p class="sub">${ui.tp ? '터닝포인트 추천을 미리 골라 뒀어요. 바꿔도 돼요.' : '올해 기본 성장의 절반이 여기로 가요.'}</p>
+    const tp = ui.tp ? turningPoint(g) : null;
+    body = `<h3 class="h2">${tp ? tp.title : '집중 육성할 능력치 2개'}</h3><p class="sub">${tp ? `${tp.body} 추천을 미리 골라 뒀어요. 바꿔도 돼요.` : '올해 기본 성장의 절반이 여기로 가요.'}</p>
       <div class="pick">${STAT_KEYS.map((k) => `<button class="pk ${ui.draftFocus.includes(k) ? 'on' : ''}" data-act="toggle-focus" data-v="${k}"><b>${STAT_LABEL[k]}${rec.includes(k) ? ' <span class="chip on" style="margin-left:4px">추천</span>' : ''}</b><span>${g.me.stats[k]} · ${g.me.rank} 평균 ${RANK_BASELINE[g.me.rank]}</span></button>`).join('')}</div>
-      <button class="btn" data-act="confirm-focus" ${ok ? '' : 'disabled'}>${ok ? '이걸로 할게요' : `${2 - ui.draftFocus.length}개 더 골라 주세요`}</button>`;
+      <button class="btn" data-act="confirm-focus" ${ok ? '' : 'disabled'}>${ok ? '이걸로 할게요' : `${2 - ui.draftFocus.length}개 더 골라 주세요`}</button>
+      ${ui.tp ? `<button class="link" data-act="tp-dismiss" data-v="${ui.tp.key}">지금 육성 그대로 둘게요</button>` : ''}`;
+  } else if (ui.sheet === 'post' && g) {
+    body = postSheet(g);
   } else if (ui.sheet === 'retire' && g) {
     body = `<h3 class="h2">전역 지원서를 낼까요?</h3><p class="sub">${g.me.rank} 계급으로 군 생활을 마무리해요. 되돌릴 수 없어요.</p>
       <div class="two"><button class="btn quiet" data-act="close-sheet">더 해볼게요</button><button class="btn" data-act="confirm-retire">전역하기</button></div>`;
@@ -1754,7 +1744,8 @@ root.addEventListener('click', (e) => {
     case 'toggle-focus': { const k = v as StatKey; ui.draftFocus = ui.draftFocus.includes(k) ? ui.draftFocus.filter((x) => x !== k) : [...ui.draftFocus, k].slice(-2); render(); break; }
     case 'confirm-focus': save!.focus = [ui.draftFocus[0], ui.draftFocus[1]]; if (ui.tp) { (save!.tpSeen ??= []).push(ui.tp.key); save!.tpLast = save!.game.year; ui.tp = null; toast('집중 육성을 바꿨어요'); } persist(); ui.sheet = null; render(); break;
     case 'tp-open': track('turning_point', { action: 'open' }); ui.tp = { key: v, rec: (el.dataset.r ?? '').split(',') as [StatKey, StatKey] }; ui.draftFocus = [...ui.tp.rec]; ui.sheet = 'focus'; render(); break;
-    case 'tp-dismiss': track('turning_point', { action: 'dismiss' }); (save!.tpSeen ??= []).push(v); save!.tpLast = save!.game.year; persist(); render(); break;
+    case 'tp-dismiss': track('turning_point', { action: 'dismiss' }); (save!.tpSeen ??= []).push(v); save!.tpLast = save!.game.year; persist(); ui.sheet = null; ui.tp = null; render(); break;
+    case 'open-post': ui.sheet = 'post'; render(); break;
     case 'open-retire': ui.sheet = 'retire'; render(); break;
     case 'confirm-retire': save!.game = retire(g!); persist(); ui.sheet = null; go('ending'); break;
     case 'open-reset': ui.sheet = 'reset'; render(); break;
