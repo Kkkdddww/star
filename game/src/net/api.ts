@@ -41,6 +41,72 @@ export async function session(): Promise<Session> {
 }
 export const myId = () => loadSession()?.user_id ?? null;
 
+// ── v3.3 로그인: 지금 익명 계정에 구글 · 카카오 연결 ──
+export type Provider = 'google' | 'kakao';
+export const PROVIDER_NAME: Record<Provider, string> = { google: '구글', kakao: '카카오' };
+const RETURN_KEY = 'malttuk-auth-return';
+function jwt(token: string): Record<string, any> | null {
+  try {
+    let b = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4) b += '=';
+    return JSON.parse(decodeURIComponent(escape(atob(b))));
+  } catch { return null; }
+}
+/** 소셜 로그인과 연결된 계정인지 */
+export function loginInfo(): { linked: boolean; provider: Provider | null } {
+  const s = loadSession();
+  const p = s ? jwt(s.access_token) : null;
+  if (!p) return { linked: false, provider: null };
+  const list: string[] = p.app_metadata?.providers ?? [p.app_metadata?.provider].filter(Boolean);
+  const pv = (list.find((x) => x === 'google' || x === 'kakao') ?? null) as Provider | null;
+  return { linked: p.is_anonymous === false && !!pv, provider: pv };
+}
+const backUrl = () => `${location.origin}${location.pathname}`;
+/** 지금 계정(기록 그대로)에 소셜 로그인 연결 → 그 회사 화면으로 이동했다가 돌아온다 */
+export async function linkProvider(p: Provider): Promise<void> {
+  const s = await session();
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user/identities/authorize?provider=${p}&redirect_to=${encodeURIComponent(backUrl())}&skip_http_redirect=true`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}` } });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(/manual linking/i.test(body) ? '계정 연결이 아직 꺼져 있어요 (운영 설정 필요)' : /provider/i.test(body) ? `${PROVIDER_NAME[p]} 로그인이 아직 준비 중이에요` : `연결하지 못했어요 ${res.status}`);
+  }
+  const { url } = await res.json();
+  try { localStorage.setItem(RETURN_KEY, 'link'); } catch { /* 무시 */ }
+  location.href = url;
+}
+/** 다른 기기에서 쓰던 계정으로 로그인 (이 기기의 익명 기록은 이어지지 않음) */
+export function signInProvider(p: Provider) {
+  try { localStorage.setItem(RETURN_KEY, 'signin'); } catch { /* 무시 */ }
+  location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=${p}&redirect_to=${encodeURIComponent(backUrl())}`;
+}
+/** 로그인 화면에서 돌아왔을 때: 주소 뒤에 붙은 토큰을 저장하고 주소를 깨끗하게 */
+export function consumeAuthReturn(): { kind: 'link' | 'signin'; ok: boolean; msg?: string } | null {
+  const h = location.hash.replace(/^#/, '');
+  if (!/access_token=|error=/.test(h)) return null;
+  const q = new URLSearchParams(h);
+  let kind: 'link' | 'signin' = 'link';
+  try { kind = (localStorage.getItem(RETURN_KEY) as 'link' | 'signin') ?? 'link'; localStorage.removeItem(RETURN_KEY); } catch { /* 무시 */ }
+  history.replaceState(null, '', location.pathname + location.search);
+  if (q.get('error')) {
+    const d = q.get('error_description') ?? '';
+    return { kind, ok: false, msg: /already linked|already exists|identity_already_exists/i.test(d) ? '이미 다른 말뚝 계정에 연결된 계정이에요. 설정에서 "그 계정으로 로그인"을 눌러 주세요' : '로그인하지 못했어요. 다시 시도해 주세요' };
+  }
+  const at = q.get('access_token'), rt = q.get('refresh_token');
+  const p = at ? jwt(at) : null;
+  if (!at || !rt || !p?.sub) return { kind, ok: false, msg: '로그인하지 못했어요. 다시 시도해 주세요' };
+  saveSession({ access_token: at, refresh_token: rt, expires_at: Math.floor(Date.now() / 1000) + Number(q.get('expires_in') ?? 3600), user_id: p.sub });
+  return { kind, ok: true };
+}
+/** 로그아웃: 이 기기는 새 익명 계정으로 시작 */
+export function logout() { saveSession(null); }
+/** 계정 삭제: 서버의 내 기록 · 프로필 · 기수 소속 · 로그인 계정 */
+export async function deleteAccount(): Promise<void> {
+  const s = await session();
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/delete_me`, { method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' }, body: '{}' });
+  if (!res.ok) throw new Error(`지우지 못했어요 ${res.status}`);
+  saveSession(null);
+}
+
 async function rest<T>(path: string, init: RequestInit = {}, auth = false): Promise<T> {
   const headers: Record<string, string> = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json', ...(init.headers as Record<string, string>) };
   if (auth) headers.Authorization = `Bearer ${(await session()).access_token}`;
@@ -54,6 +120,8 @@ async function rest<T>(path: string, init: RequestInit = {}, auth = false): Prom
     else if (/runs_daily_once/i.test(body)) throw new AlreadyError('오늘의 기수는 하루 한 번만 올릴 수 있어요');
     else if (/runs_cohort_once/i.test(body)) throw new AlreadyError('이 기수에는 이미 기록을 올렸어요');
     else if (/runs_contest_once/i.test(body)) throw new AlreadyError('이번 주 대항전 판은 이미 올렸어요');
+    else if (/nick_taken/.test(body)) throw new Error('이미 다른 사람이 쓰는 닉네임이에요');
+    else if (/nick_wait/.test(body)) throw new Error('닉네임은 7일에 한 번 바꿀 수 있어요');
     else if (/3곳까지/.test(body)) throw new Error('기수는 3곳까지 들어갈 수 있어요');
     else if (/정원이 다/.test(body)) throw new Error('정원 30명이 다 찼어요');
     else if (/members_pkey|duplicate key/i.test(body) && path.startsWith('members')) throw new Error('이미 들어간 기수예요');
@@ -78,7 +146,7 @@ export interface CardExtra { luck?: { exp: number; hit: number; pct: number } | 
 export type NewRun = Omit<RunRow, 'id' | 'user_id' | 'ended_on' | 'created_at'>;
 export class AlreadyError extends Error {}
 
-export interface Profile { id: string; nickname: string; equipped_title: string | null; main_cohort?: string | null }
+export interface Profile { id: string; nickname: string; equipped_title: string | null; main_cohort?: string | null; serial?: number | null; nick_changed_at?: string | null; created_at?: string }
 
 export async function getProfile(): Promise<Profile | null> {
   const s = await session();
@@ -212,9 +280,28 @@ export const nicknames = async (ids: string[]): Promise<Record<string, string>> 
   return Object.fromEntries(rows.map((r) => [r.id, r.nickname]));
 };
 /** 랭킹 닉네임 옆 약장: 대표 기수 */
-export interface TeamTag { id: string; main_cohort: string | null; cohorts: { ribbon: number[] | null; no: number | null; name: string } | null }
-export const teamTags = async (ids: string[]): Promise<TeamTag[]> => (ids.length ? rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&main_cohort=not.is.null&select=id,main_cohort,cohorts(ribbon,no,name)`) : []);
+export interface TeamTag { id: string; nickname: string; main_cohort?: string | null; cohorts?: { ribbon: number[] | null; no: number | null; name: string } | null }
+/** 랭킹 줄: 지금 닉네임 + 대표 기수. SQL 전이면 닉네임만 */
+export const teamTags = async (ids: string[]): Promise<TeamTag[]> => {
+  if (!ids.length) return [];
+  try { return await rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname,main_cohort,cohorts(ribbon,no,name)`); }
+  catch { return rest<TeamTag[]>(`profiles?id=in.(${ids.join(',')})&select=id,nickname`); }
+};
 export const setMainTeam = async (cohortId: string | null) => rest(`profiles?id=eq.${(await session()).user_id}`, { method: 'PATCH', body: JSON.stringify({ main_cohort: cohortId }) }, true);
+
+// ── v3.3 인사기록카드 ──
+export interface Stats { user_id: string; runs: number; generals: number; fourstars: number; best_rank: number; best_free: number | null; daily_days: number; contest_weeks: number; xp: number }
+export const profileOf = async (id: string) => (await rest<Profile[]>(`profiles?id=eq.${id}&select=*`))[0] ?? null;
+export const statsOf = async (id: string) => (await rest<Stats[]>(`profile_stats?user_id=eq.${id}&select=*`))[0] ?? null;
+export const dailyBest = async (id: string) => (await rest<{ day: string; place: number; total: number }[]>(`daily_places?user_id=eq.${id}&select=day,place,total&order=place.asc,day.desc&limit=1`))[0] ?? null;
+export const teamsOf = (id: string) => rest<MyTeam[]>(`members?user_id=eq.${id}&select=cohort_id,user_id,seq,joined_at,cohorts(*)&order=joined_at.asc`);
+export const runsOf = (id: string, limit = 5) => rest<RunRow[]>(`runs?select=${LIST}&user_id=eq.${id}&order=created_at.desc&limit=${limit}`);
+export const ribbonsOf = (id: string) => rest<{ ribbons: { id: string; t: number }[] }[]>(`runs?select=ribbons&user_id=eq.${id}&limit=500`);
+/** 같은 닉네임을 쓰는 사람 수 (띄어쓰기 무시는 서버 규칙, 여기선 그대로 비교) */
+export const sameNickCount = async (nick: string) => {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&nickname=eq.${encodeURIComponent(nick)}&limit=1`, { headers: { apikey: SUPABASE_KEY, Prefer: 'count=exact' } });
+  return Number(res.headers.get('content-range')?.split('/')[1] ?? 0);
+};
 
 // ── 방명록 ──
 export interface GuestRow { id: number; user_id: string; nickname: string; body: string; reply: string | null; created_at: string }

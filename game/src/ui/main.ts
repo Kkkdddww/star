@@ -8,6 +8,7 @@ import { advanceYear, careerYear, decide, newGame, retire, rivalOf, setPolicy, s
 import { branchFits, overall } from '../engine/growth';
 import { earnedRibbons, earnedTitles, honorScore, RIBBONS, TITLES, titleName, type Earned } from '../engine/meta';
 import { initAnalytics, track } from '../net/analytics';
+import { hobongOf, runXp } from '../engine/hobong';
 import { CONTEST_FROM, CONTEST_POT, contestOpen, MAX_TEAMS, weekNo, weekOf } from '../engine/contest';
 import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, type Candidate } from '../engine/candidates';
 import { asg, assignmentsFor, isRequired, lacksRequired, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
@@ -25,9 +26,9 @@ import { adSlot, initRewarded, mountAds, rewardedOn, showRewarded } from './ads'
 import { NOTICES, applySettings, footer, hasNewNotice, reduceMotion, setReduceMotion, settingsState } from './site';
 import { guestPreview, gs, cohortCached, cohortOpen, inviteData, rememberCohort } from './group';
 import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk, routeOf, rowHtml, saveNickname, setRerender, viewRoute, type CardData } from './social';
-import { contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
+import { forgetPeople, contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
 import { randomRibbon, teamRibbon } from './teamRibbon';
-import { AlreadyError, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
+import { AlreadyError, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
 
 // ───────── 저장 ─────────
 interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number }
@@ -52,7 +53,7 @@ function useSlot(sl: Slot) {
   persist();
   slot = sl;
   save = read<Save>(SLOT_KEY[sl]);
-  ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0 };
+  ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null };
   ui.report = null; ui.queue = []; ui.tab = 'home';
 }
 const isDaily = (g: GameState | null | undefined) => g?.mode === 'daily';
@@ -130,7 +131,7 @@ const ui = {
   ad: { kind: 'eval' as 'eval' | 'reroll', left: 0 },
   pro: null as Prologue | null,
   newRibbons: [] as string[],
-  upload: { nick: '', msg: '', busy: false, loaded: false, fails: 0 },
+  upload: { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null as string | null },
   adBusy: false,
   medals: [] as Earned[],
   tp: null as { key: string; rec: [StatKey, StatKey] } | null,
@@ -276,12 +277,18 @@ function lobbyTab(): LobbyTab {
 
 /** 로비 맨 위: 내 카드 한 줄 (v3.3 인사기록카드 입구) */
 function meCard(best: number): string {
+  // 서버 기록이 있으면 최고 계급은 서버 기준
   const prof = load('profile', getProfile);
   const p = prof.state === 'ok' ? prof.data : null;
   const name = p?.nickname ?? (ui.upload.nick.trim() || '닉네임 없음');
   const mine = myTeamsNow();
   const main = mine?.find((t) => t.cohort_id === p?.main_cohort) ?? mine?.[0];
-  return `<a class="pf" href="#/rank" data-act="route-mine">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${meta.runs ?? 0}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span></span><span class="ch">${icon('chev')}</span></a>`;
+  const me = myId();
+  const st = me && p ? load(`person:stats:${me}`, () => statsOf(me).catch(() => null)) : null;
+  const hb = st?.state === 'ok' && st.data ? hobongOf(st.data.xp) : null;
+  const runs = st?.state === 'ok' && st.data ? st.data.runs : meta.runs ?? 0;
+  if (st?.state === 'ok' && st.data) best = Math.max(best, st.data.best_rank);
+  return `<a class="pf" href="#/p/me">${insignia(best < 0 ? '소위' : RANKS[best], 26, false)}<span class="g"><b>${esc(name)}</b>${hb ? `<span class="hb">${hb.level}호봉</span>` : ''}${main ? `<span class="ttag">${teamRibbon(main.cohorts.ribbon, 22, null)}</span>` : ''}<span class="s">${best < 0 ? '아직 임관 전' : `최고 ${RANKS[best]}`} · ${runs}판${main ? ` · ${main.cohorts.no ?? '-'}기 ${esc(main.cohorts.name)}` : ''}</span>${hb ? `<span class="xpbar" style="height:4px;margin-top:6px;display:block"><i style="width:${Math.round((hb.into / hb.need) * 100)}%"></i></span>` : ''}</span><span class="ch">${icon('chev')}</span></a>`;
 }
 
 const lrow = (r: RunRow, i: number) => rowHtml(r, i + 1);
@@ -347,6 +354,7 @@ function viewLobby(): string {
     ${guestPreview()}
     <main class="stack" style="padding-bottom:${primary ? 120 : 32}px">
       ${meCard(best)}
+      ${!loginInfo().linked && (meta.runs ?? 0) > 0 ? `<a class="loginrow" href="#/settings"><span class="tx"><b>기록 지키기</b> · 기기를 바꿔도 이어져요</span><span class="go">구글 · 카카오 ›</span></a>` : ''}
       <div class="tiles">
         ${tile('d', 'calendar', '매일', '오늘의 기수', dSub)}
         ${tile('c', 'people', '매주', '대항전', cSub)}
@@ -1184,14 +1192,31 @@ function endingCard(g: GameState): CardData & { titleId: string | null } {
   };
 }
 
+/** 전역 화면: 이번 판 경험치와 호봉 (서버 기록 기준) */
+function hobongLine(): string {
+  const me = myId();
+  if (!me || !save?.game) return '';
+  const st = load(`person:stats:${me}`, () => statsOf(me).catch(() => null));
+  if (st.state !== 'ok' || !st.data) return '';
+  const g = save.game;
+  const mode = isDaily(g) ? 'daily' : isContest(g) ? 'contest' : isGroup(g) ? 'cohort' : 'free';
+  const gain = mode === 'free' && freeToday() > 5 ? 0 : runXp(rankCount(g.me.rank), mode);
+  const hb = hobongOf(st.data.xp);
+  return `<span class="hbline"><b>+${gain}</b> · ${hb.level}호봉 · 다음 호봉까지 ${hb.need - hb.into}${gain === 0 ? ' · 자유 플레이 경험치는 하루 5판까지' : ''}</span>`;
+}
+const FREE_KEY = 'malttuk-free-xp';
+function freeToday(): number { try { const x = JSON.parse(localStorage.getItem(FREE_KEY) ?? 'null'); return x?.d === today() ? x.n : 0; } catch { return 0; } }
+function bumpFreeToday() { try { localStorage.setItem(FREE_KEY, JSON.stringify({ d: today(), n: freeToday() + 1 })); } catch { /* 무시 */ } }
+
 function uploadBox(): string {
   const u = ui.upload;
-  if (save!.runId) return `<div class="upbox done"><div class="g"><b>랭킹에 올렸어요</b><span>오늘의 랭킹과 갤러리에 내 카드가 보여요</span></div><button class="more" data-act="open-card" data-v="${save!.runId}">내 카드 ${icon('chev')}</button></div>`;
+  if (save!.runId) return `<div class="upbox done"><div class="g"><b>랭킹에 올렸어요</b><span>오늘의 랭킹과 갤러리에 내 카드가 보여요</span>${hobongLine()}</div><button class="more" data-act="open-card" data-v="${save!.runId}">내 카드 ${icon('chev')}</button></div>`;
   return `<div class="upbox">
     <b>마지막 단계 · 랭킹에 올리기</b>
-    <span>닉네임을 정하고 올리면 내 카드 링크가 생기고, 다른 사람과 순위를 겨뤄요</span>
-    <label class="lbl" for="upnick" style="margin:14px 0 6px">랭킹에 보일 닉네임</label>
-    <input id="upnick" class="inp" style="height:50px;background:var(--bg)" maxlength="12" placeholder="닉네임 (2~12자)" value="${esc(u.nick)}">
+    <span>올리면 내 카드 링크가 생기고, 다른 사람과 순위를 겨뤄요</span>
+    ${u.fixed ? `<p class="sub" style="margin-top:12px"><b class="olive">${esc(u.fixed)}</b> 이름으로 올려요 · 닉네임은 인사기록카드에서 바꿀 수 있어요</p>` : `
+    <label class="lbl" for="upnick" style="margin:14px 0 6px">랭킹에 보일 닉네임 · 한 번 정하면 계속 써요</label>
+    <input id="upnick" class="inp" style="height:50px;background:var(--bg)" maxlength="12" placeholder="닉네임 (2~12자)" value="${esc(u.nick)}">`}
     ${u.msg ? `<p class="small" style="margin-top:8px;color:var(--red)">${esc(u.msg)}</p>` : ''}
   </div>`;
 }
@@ -1204,7 +1229,7 @@ function viewEnding(g: GameState): string {
     ui.upload.loaded = true;
     track('game_end', { final_rank: g.ended!.finalRank, years: g.history.length, reason: String(g.ended!.reason ?? '') });
     ui.upload.nick = me.name;
-    getProfile().then((p) => { if (p && !save?.runId) { ui.upload.nick = p.nickname; render(); } }).catch(() => {});
+    getProfile().then((p) => { if (p && !save?.runId) { ui.upload.nick = p.nickname; ui.upload.fixed = p.nickname; render(); } }).catch(() => {});
   }
   const d = endingCard(g);
   void prepareCard(d, imgLink()).catch(() => {});
@@ -1251,8 +1276,8 @@ function dailyNext(): string {
 
 async function upload(g: GameState) {
   const u = ui.upload;
-  const nick = u.nick.trim();
-  const problem = nicknameProblem(nick);
+  const nick = (u.fixed ?? u.nick).trim();
+  const problem = u.fixed ? null : nicknameProblem(nick);
   if (problem) { u.msg = problem; render(); return; }
   u.busy = true; u.msg = ''; render();
   try {
@@ -1276,6 +1301,8 @@ async function upload(g: GameState) {
     if (isDaily(g)) invalidateDaily();
     if (isGroup(g)) invalidate('grpruns');
     save!.runId = id; persist();
+    if (!isFixed(g)) bumpFreeToday();
+    ui.upload.fixed = nick; invalidate('person');
     invalidate('rank'); invalidate('gallery'); invalidate('mine'); invalidate('profile');
     toast('랭킹에 올렸어요');
     track('rank_upload', { final_rank: g.ended!.finalRank });
@@ -1465,7 +1492,7 @@ root.addEventListener('change', (e) => {
   const t = e.target as HTMLSelectElement;
   if (t.id === 'rday') { rk.day = Number(t.value); render(); }
 });
-window.addEventListener('hashchange', () => { settingsState.confirmWipe = false; settingsState.msg = ''; ui.route = routeOf(location.hash); prefillGuest(); render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { settingsState.confirmWipe = false; settingsState.msg = ''; settingsState.confirmDelete = false; settingsState.confirmLogout = false; settingsState.authMsg = ''; ui.route = routeOf(location.hash); prefillGuest(); render(); window.scrollTo(0, 0); });
 function prefillGuest() {
   if (ui.route?.name !== 'guestbook' || gs.gbNick) return;
   getProfile().then((p) => { if (p && !gs.gbNick) { gs.gbNick = p.nickname; render(); } }).catch(() => {});
@@ -1546,6 +1573,7 @@ root.addEventListener('click', (e) => {
     }
     case 'team-new': {
       if ((myTeamsNow()?.length ?? 0) >= MAX_TEAMS) { toast(`기수는 ${MAX_TEAMS}곳까지 들어갈 수 있어요`); break; }
+      if (!loginInfo().linked) { toast('기수 만들기는 로그인이 필요해요 · 기수장 자리를 지켜 줘요'); location.hash = '#/settings'; break; }
       Object.assign(cs, { name: '', motto: '', ribbon: randomRibbon(), pub: true, msg: '', busy: false, edit: null });
       location.hash = '#/contest/new'; break;
     }
@@ -1675,7 +1703,7 @@ root.addEventListener('click', (e) => {
       const game = startGame();
       const focus: [StatKey, StatKey] = p.focus.includes('리더십') ? ['command', 'tactics'] : p.focus.includes('학업') ? ['expertise', 'admin'] : ['command', 'social'];
       save = { game, focus, potentialSeen: p.fixedPot ?? p.range, metaApplied: false, log: [], runId: null };
-      ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0 };
+      ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null };
       persist();
       go('p-commission');
       break;
@@ -1695,7 +1723,7 @@ root.addEventListener('click', (e) => {
     case 'open-reset': ui.sheet = 'reset'; render(); break;
     case 'new-game': if (isFixed(g)) { ui.sheet = null; ui.report = null; useSlot('free'); go('lobby'); break; }
     // falls through
-    case 'confirm-reset': if (isFixed(g)) { ui.sheet = null; render(); break; } ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0 }; save = null; persist(); ui.sheet = null; ui.report = null; ui.pro = null; ui.tab = 'home'; invalidate('rank'); go(act === 'new-game' ? 'lobby' : 'p-intro'); break;
+    case 'confirm-reset': if (isFixed(g)) { ui.sheet = null; render(); break; } ui.upload = { nick: '', msg: '', busy: false, loaded: false, fails: 0, fixed: null }; save = null; persist(); ui.sheet = null; ui.report = null; ui.pro = null; ui.tab = 'home'; invalidate('rank'); go(act === 'new-game' ? 'lobby' : 'p-intro'); break;
     case 'close-sheet': clearInterval(adTimer); ui.sheet = null; ui.tp = null; render(); break;
     case 'equip': meta.equipped = meta.equipped === v ? null : v; persistMeta(); render(); break;
     case 'share': track('share_link'); if (g) void share(g); break;
@@ -1719,6 +1747,25 @@ root.addEventListener('click', (e) => {
     case 'route-mine': rk.tab = 'mine'; location.hash = '#/rank'; if (ui.route?.name === 'rank') render(); break;
     case 'route-gallery': location.hash = '#/gallery'; break;
     case 'open-card': location.hash = `#/card/${v}`; break;
+    case 'open-person': location.hash = `#/p/${v}`; break;
+    // v3.3 로그인
+    case 'auth-link': settingsState.authMsg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
+    case 'auth-signin': {
+      if (!confirm('다른 기기에서 쓰던 계정으로 로그인할까요? 이 기기에서 연결하지 않고 쌓은 서버 기록은 그 계정으로 옮겨지지 않아요.')) break;
+      track('login_signin', { provider: v }); signInProvider(v as Provider); break;
+    }
+    case 'auth-logout': {
+      if (!settingsState.confirmLogout) { settingsState.confirmLogout = true; render(); break; }
+      logout(); invalidate(''); forgetPeople(); ui.lobbyTab = null; settingsState.confirmLogout = false; toast('로그아웃했어요'); location.hash = ''; break;
+    }
+    case 'auth-delete': {
+      if (!settingsState.confirmDelete) { settingsState.confirmDelete = true; render(); break; }
+      settingsState.confirmDelete = false;
+      void deleteAccount().then(() => { invalidate(''); forgetPeople(); toast('계정을 지웠어요'); location.hash = ''; })
+        .catch((e) => { settingsState.authMsg = e instanceof Error ? e.message : '지우지 못했어요'; render(); });
+      break;
+    }
+    case 'go-back': if (history.length > 1) history.back(); else location.hash = ''; break;
     case 'rank-tab': rk.tab = v as typeof rk.tab; render(); break;
     case 'rank-origin': rk.origin = v || null; render(); break;
     case 'save-nick': void saveNickname(); break;
@@ -1786,4 +1833,11 @@ initAnalytics();
 initRewarded();
 prefillGuest();
 applySettings();
+// v3.3 로그인 화면에서 돌아왔으면 토큰 저장
+const authBack = consumeAuthReturn();
+if (authBack) { ui.route = null; invalidate(''); }
 render();
+if (authBack) {
+  track(authBack.ok ? 'login_ok' : 'login_fail', { kind: authBack.kind });
+  toast(authBack.ok ? (authBack.kind === 'link' ? '연결했어요 · 이제 기기를 바꿔도 기록이 이어져요' : '로그인했어요') : authBack.msg ?? '로그인하지 못했어요');
+}

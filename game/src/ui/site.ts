@@ -1,4 +1,5 @@
 import { adSlot } from './ads';
+import { loginInfo, PROVIDER_NAME } from '../net/api';
 // 사이트 페이지: 공지·패치노트, 게임 소개, 게임 가이드, 개인정보처리방침, 이용약관, 설정 + 공통 푸터
 const back = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>';
 export const CONTACT_URL = 'https://github.com/Kkkdddww/star/issues';
@@ -9,7 +10,7 @@ export const SITE_PAGES: SitePage[] = ['notice', 'about', 'guide', 'privacy', 't
 
 // ── 공지·패치노트 (위가 최신) ──
 export const NOTICES: { id: string; date: string; title: string; items: string[] }[] = [
-  { id: '3.3', date: '2026.11.14', title: '기수 대항전 준비 · 새 로비', items: ['기수 대항전이 11월 30일(월)부터 매주 열려요. 기수를 만들고 동기를 모아 두세요', '대항전 기수는 계속 가는 팀이에요. 이름, 구호, 기수 약장(240가지), 기수 번호가 있어요', '한 사람 한 주 한 판, 그 판이 내가 속한 기수(최대 3곳) 점수에 모두 들어가요. 팀 점수는 상위 3명 평균 + 4번째 동기부터 1명당 +5', '1~3위 기수는 표창장을 받고, 기수 약장에 별과 금테가 붙어요', '혼자라면 \'아무 기수나 들어가기\'로 공개 기수에 들어갈 수 있어요', '로비가 바뀌었어요. 매일 · 매주 · 언제나 세 모드를 한눈에 보고, 모드마다 순위를 바로 볼 수 있어요', '랭킹에서 닉네임 옆에 대표 기수 약장이 보여요'] },
+  { id: '3.3', date: '2026.11.14', title: '기수 대항전 · 로그인 · 인사기록카드', items: ['기수 대항전이 11월 30일(월)부터 매주 열려요. 대항전 기수는 계속 가는 팀이고, 이름 · 구호 · 기수 약장(240가지) · 기수 번호가 있어요', '한 사람 한 주 한 판, 그 판이 내가 속한 기수(최대 3곳) 점수에 모두 들어가요. 팀 점수는 상위 3명 평균 + 4번째 동기부터 1명당 +5. 혼자라면 \'아무 기수나 들어가기\'', '1~3위 기수는 표창장을 받고, 기수 약장에 별과 금테가 붙어요. 랭킹에서 닉네임 옆에 대표 기수 약장이 보여요', '구글 · 카카오로 계정을 연결하면 기기를 바꿔도 기록 · 호봉 · 기수가 이어져요. 기수 만들기는 로그인이 필요해요', '랭킹에서 사람을 누르면 인사기록카드가 열려요. 호봉, 소속 기수, 오늘의 기수 최고 순위, 대항전 기록, 약장을 볼 수 있어요', '호봉: 판을 끝낼 때마다 경험치가 쌓여요(자유 플레이는 하루 5판까지). 능력치에는 영향이 없어요', '닉네임은 계정마다 하나로 고정돼요. 바꾸기는 인사기록카드에서 7일에 한 번, 새 이름은 다른 사람과 겹칠 수 없어요', '로비가 바뀌었어요. 매일 · 매주 · 언제나 세 모드를 한눈에 보고, 모드마다 순위를 바로 볼 수 있어요'] },
   { id: '3.2', date: '2026.11.14', title: '공정한 출발선 · 시즌 2', items: ['오늘의 기수 · 우리 기수는 후보 3명 잠재력이 모두 같아요. 난이도는 평일 보통(A), 토요일 쉬움(S), 일요일 어려움(B). 11월 15일 기수부터 적용돼요', '잠재력 차이를 줄였어요. B·C도 선택을 잘하면 대령, 장군까지 갈 수 있어요. 각성도 더 자주 일어나요', '명예의 전당이 시즌 2로 새로 시작해요. 시즌 1 기록은 보관돼 있고, 시즌 전체 순위는 한 사람당 최고 기록 하나만 보여요', '오늘의 기수를 마치면 자유 플레이와 우리 기수로 바로 갈 수 있어요', '내 한마디에 답글이 달리면 로비 한마디 띠에 표시돼요', '운영진으로 보이는 닉네임은 쓸 수 없어요'] },
   { id: '3.1', date: '2026.11.13', title: '우리 기수 · 한마디 · 로비 정리', items: ['우리 기수: 기수를 만들고 링크로 친구를 부르면, 모두 같은 후보·같은 동기·같은 결재함으로 출발해요. 7일 동안 한 사람당 한 판, 최대 30명', '기수 페이지에서 순위, 기수 시상(명예왕·표창왕·말뚝상·행운아 등), 친구와 처음 선택이 갈린 순간을 볼 수 있어요', '개발자한테 한마디: 버그·건의·응원을 남겨 주세요. 개발자가 답글을 달아요', '로비를 정리했어요. 플레이 방식 세 가지를 한곳에 모았고, 아래 버튼은 지금 할 만한 것 하나만 보여줘요', '자유 플레이 랭킹이 "명예의 전당"이 됐어요. 세 모드 모두 계급 → 명예 점수 → 복무 기간 순이에요. 명예 점수가 없는 예전 기록은 같은 계급 안에서 뒤로 가요'] },
   { id: '3.0', date: '2026.11.13', title: '오늘의 기수 · 인사 개편', items: ['오늘의 기수: 하루 한 번, 오늘 입대한 모두가 같은 후보·같은 동기·같은 첫 결재함으로 시작해요. 다시 뽑기 없이 첫 판만 기록돼요', '같은 계급이면 명예 점수(약장·칭호·표창·무사고 등)로 순위를 가려요. 전역하면 남들과 달랐던 선택을 보여줘요', '희망 조사: 자리마다 부대 분위기(훈련 많은·새로 만든·잘나가는·분위기 안 좋은·평가 앞둔)가 달라요. 1지망으로 올 동기 수와 내 순위도 미리 보여줘요', '인사 발표: 봉투를 열면 새 상관(꼼꼼한·성과형·방임형·사람 좋은)이 공개돼요. 상관에 따라 결재 확률과 평정이 달라져요', '임기 목표: 2년 임기 동안 목표를 이루면 평정 가점과 표창', '자유 플레이는 그대로예요'] },
@@ -34,7 +35,7 @@ export function setReduceMotion(on: boolean) {
   document.documentElement.classList.toggle('calm', on);
 }
 export const applySettings = () => document.documentElement.classList.toggle('calm', reduceMotion());
-export const settingsState = { confirmWipe: false, msg: '' };
+export const settingsState = { confirmWipe: false, msg: '', confirmDelete: false, confirmLogout: false, authMsg: '' };
 
 function head(title: string): string {
   return `<header class="top"><button class="iconbtn" style="margin:0 0 0 -8px" data-act="route-home" aria-label="게임으로">${back}</button><span class="t">${title}</span><span class="sp"></span></header>`;
@@ -85,16 +86,19 @@ function viewPrivacy(): string {
       <li><b>게임 진행 기록</b> · 내 브라우저(로컬 저장소)에만 저장돼요. 서버로 보내지 않아요.</li>
       <li><b>랭킹 기록</b> · 랭킹에 올릴 때만 닉네임, 전역 카드 내용(계급, 보직, 약장 등), 익명 식별자를 서버에 저장해요.</li>
       <li><b>방문 통계</b> · Google Analytics로 방문 페이지, 기기 종류, 대략적 지역, 게임 이벤트(시작, 전역 등)를 수집해요. 쿠키를 사용해요.</li></ul>
-      <p>이름, 연락처, 이메일 같은 개인 식별 정보는 받지 않아요. 게임 속 이름은 기기 안에만 저장돼요.</p>`) +
+      <li><b>로그인(선택)</b> · 구글 · 카카오로 연결하면 로그인 고유번호를 인증 서비스(Supabase)에 저장해요. 회사가 이메일을 함께 주면 인증 서비스에 저장되지만 화면에 보여주거나 다른 용도로 쓰지 않아요.</li>
+      <li><b>인사기록카드</b> · 닉네임, 군번(가입 순서), 랭킹 기록으로 계산한 호봉 · 기록, 소속 기수가 다른 이용자에게 보여요.</li>
+      <p>실명, 연락처는 받지 않아요. 게임 속 이름은 기기 안에만 저장돼요.</p>`) +
     sec('2. 이용 목적', '<p>랭킹·카드 공유 기능 제공, 게임 개선을 위한 통계 분석, 광고 게재에 써요.</p>') +
     sec('3. 보관과 삭제', `<ul>
-      <li>랭킹 기록은 서비스를 운영하는 동안 보관해요. 삭제를 원하면 <a href="${CONTACT_URL}" target="_blank" rel="noopener">문의</a>로 카드 링크를 알려 주세요.</li>
+      <li>랭킹 기록은 서비스를 운영하는 동안 보관해요. 설정 → 계정 삭제를 누르면 서버의 내 기록, 닉네임, 호봉, 기수 소속, 로그인 정보가 바로 지워져요.</li>
       <li>기기에 저장된 기록은 설정 메뉴나 브라우저 데이터 삭제로 지울 수 있어요.</li></ul>`) +
     sec('4. 외부 서비스', `<ul>
-      <li>Supabase · 랭킹 데이터 저장</li>
+      <li>Supabase · 랭킹 데이터 저장, 로그인 인증</li>
+      <li>Google · 카카오 · 로그인(선택)</li>
       <li>Google Analytics · 방문 통계 (<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">구글 개인정보처리방침</a>)</li>
       <li>카카오 애드핏, 구글 애드센스 · 광고 게재. 광고 회사는 광고를 보여주고 성과를 측정하기 위해 쿠키나 기기 식별 정보를 사용할 수 있어요. 맞춤형 광고는 각 회사의 광고 설정에서 끌 수 있어요 (<a href="https://adssettings.google.com" target="_blank" rel="noopener">구글 광고 설정</a>)</li></ul>`) +
-    sec('5. 문의', `<p>개인정보 관련 문의는 <a href="${CONTACT_URL}" target="_blank" rel="noopener">문의 페이지</a>로 남겨 주세요.</p><p class="faint">시행일 2026년 11월 12일</p>`));
+    sec('5. 문의', `<p>개인정보 관련 문의는 <a href="${CONTACT_URL}" target="_blank" rel="noopener">문의 페이지</a>로 남겨 주세요.</p><p class="faint">시행일 2026년 11월 30일 (로그인 · 인사기록카드 추가)</p>`));
 }
 
 function viewTerms(): string {
@@ -108,12 +112,24 @@ function viewTerms(): string {
 
 function viewSettings(): string {
   const on = reduceMotion();
-  return wrap('설정', `<section class="doc" style="margin:0 0 10px"><div class="bd">
+  const li = loginInfo();
+  const acct = li.linked
+    ? `<div class="kv"><span>로그인</span><b class="olive">${PROVIDER_NAME[li.provider!]}로 연결됨</b></div><p class="faint" style="margin-top:6px">기기를 바꿔도 같은 계정으로 로그인하면 기록 · 호봉 · 기수가 이어져요</p>
+      <button class="setrow" data-act="auth-logout"><span><b>${settingsState.confirmLogout ? '한 번 더 누르면 로그아웃해요' : '로그아웃'}</b><span>이 기기는 새 익명 계정으로 시작해요. 다시 로그인하면 돌아와요</span></span></button>`
+    : `<p class="sub" style="margin-bottom:10px"><b>기록 지키기</b> · 지금 기록은 이 기기에만 묶여 있어요. 연결하면 기록 그대로 기기를 바꿔도 이어져요</p>
+      <div class="two"><button class="btn line" style="height:48px;font-size:15px" data-act="auth-link" data-v="google">구글로 연결</button><button class="btn line" style="height:48px;font-size:15px" data-act="auth-link" data-v="kakao">카카오로 연결</button></div>
+      <p class="faint" style="margin-top:12px">다른 기기에서 쓰던 계정이 있나요? <button class="link" data-act="auth-signin" data-v="google">구글로 로그인</button> · <button class="link" data-act="auth-signin" data-v="kakao">카카오로 로그인</button></p>`;
+  return wrap('설정', `<section class="doc" style="margin:0 0 10px"><div class="hd"><span>계정</span></div><div class="bd">
+      ${acct}
+      ${settingsState.authMsg ? `<p class="small" style="margin-top:8px;color:var(--red)">${settingsState.authMsg}</p>` : ''}
+    </div></section>
+    <section class="doc" style="margin:0 0 10px"><div class="bd">
       <button class="setrow" data-act="set-motion"><span><b>움직임 줄이기</b><span>훈장·진급 연출과 애니메이션을 최소로 해요</span></span><i class="tog ${on ? 'on' : ''}"></i></button>
     </div></section>
     <section class="doc" style="margin:0 0 10px"><div class="hd"><span>데이터</span></div><div class="bd">
       <button class="setrow" data-act="set-wipe"><span><b>${settingsState.confirmWipe ? '한 번 더 누르면 지워져요' : '이 기기의 기록 모두 지우기'}</b><span>진행 중인 게임, 약장 도감, 칭호가 지워져요. 랭킹에 올린 기록은 남아요</span></span></button>
       ${settingsState.msg ? `<p class="faint" style="margin-top:8px">${settingsState.msg}</p>` : ''}
+      <button class="setrow" data-act="auth-delete"><span><b class="red">${settingsState.confirmDelete ? '한 번 더 누르면 계정이 지워져요' : '계정 삭제'}</b><span>서버의 내 기록 · 닉네임 · 호봉 · 기수 소속이 모두 지워지고 되돌릴 수 없어요</span></span></button>
     </div></section>
     <section class="doc" style="margin:0 0 10px"><div class="bd">
       <div class="kv"><span>버전</span><b>v${NOTICES[0].id}</b></div>

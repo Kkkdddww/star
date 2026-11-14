@@ -154,3 +154,11 @@
 - 화면: `ui/contest.ts`(대항전 #/contest, 기수 만들기 #/contest/new, 대항전 기수 페이지, 표창장 #/award/코드/주, 로비 대항전 문서, 전역 화면 팀 반영, 랭킹 닉네임 옆 약장 `teamTag`), `ui/teamRibbon.ts`(바탕 8 × 모양 6 × 색 5, 별 동 · 은 · 금 + 금테).
 - 로비: 내 카드 한 줄 + 모드 타일 3개(매일 · 매주 · 언제나) + 고른 모드 문서(그 모드 순위 1~3위). 아래 바는 진행 중인 판이 있을 때만.
 - QA: `qa/contest.mjs`(12/2로 시계 고정, 가짜 대항전 응답), smoke는 탭을 먼저 누르도록 수정.
+
+## v3.3 (2단계) · 로그인 · 인사기록카드 · 호봉 · 고정 닉네임 (2026-11-14)
+- SQL(같은 v3.3 파일 뒤쪽): `profiles.serial`(군번, 기존은 created_at 순서로 채움) · `nick_changed_at`, 트리거 `nick_rules`(새로/바꿀 때만 겹침 금지, 바꾸기 7일 1회, upsert INSERT 경로는 같은 이름이면 통과 → 예전부터 겹치던 이름도 업로드 가능), 뷰 `profile_stats`(경험치 = 20 + 5×계급 + 오늘의 기수 30 · 대항전 20, 자유는 하루 5판까지), `daily_places`, 함수 `delete_me()`.
+- 로그인(`net/api.ts`): 라이브러리 없이 GoTrue REST. 연결 = `GET /auth/v1/user/identities/authorize?skip_http_redirect=true`(익명 계정 그대로, Supabase "manual linking" 필요), 다른 기기 로그인 = `/auth/v1/authorize`. 돌아온 주소의 `#access_token`은 `consumeAuthReturn()`이 첫 렌더 전에 저장하고 주소를 지움. 연결 여부는 JWT `is_anonymous`·`app_metadata.providers`.
+- 고정 닉네임: 프로필이 있으면 업로드는 버튼만. 랭킹 줄 이름은 판 기록 대신 프로필 닉네임(`nameOf`, 대표 기수 약장과 한 번에 불러옴).
+- 인사기록카드 `ui/person.ts`(#/p/아이디, #/p/me): 랭킹 줄 · 시상대 · 기수 명부 · 점수 반영 줄에서 열림. 호봉 `engine/hobong.ts`(n→n+1 필요 200+15(n−1), 30호봉 약 두 달).
+- 설정: 계정(구글 · 카카오 연결, 다른 기기 계정으로 로그인, 로그아웃, 계정 삭제). 개인정보처리방침 수정(로그인 · 인사기록카드 · 계정 삭제).
+- 기수 만들기는 로그인(연결) 필요. 꾸미기 해금(5호봉마다)은 아직 없음.

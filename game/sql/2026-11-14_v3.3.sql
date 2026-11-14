@@ -126,3 +126,82 @@ from contest_results
 where week < date_trunc('week', now() at time zone 'Asia/Seoul')::date
 group by cohort_id;
 grant select on team_honors to anon, authenticated;
+
+-- ═══════════ 5. 인사기록카드 · 호봉 · 고정 닉네임 ═══════════
+
+-- 군번: 가입 순서 번호 (기존 프로필은 만든 순서대로 채움)
+create sequence if not exists profile_serial_seq;
+alter table profiles add column if not exists serial bigint;
+alter table profiles add column if not exists nick_changed_at timestamptz;
+do $$ begin
+  if exists (select 1 from profiles where serial is null) then
+    with o as (select id, row_number() over (order by created_at, id) as rn from profiles where serial is null)
+    update profiles p set serial = (select coalesce(max(serial), 0) from profiles) + o.rn from o where p.id = o.id;
+    perform setval('profile_serial_seq', (select max(serial) from profiles));
+  end if;
+end $$;
+alter table profiles alter column serial set default nextval('profile_serial_seq');
+
+-- 닉네임 규칙: 새로 정하거나 바꿀 때만 겹침 금지 (띄어쓰기 · 대소문자 무시), 바꾸기는 7일에 한 번
+create or replace function nick_rules() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'UPDATE' and new.nickname is not distinct from old.nickname then return new; end if;
+  -- 업로드 때 쓰는 upsert는 먼저 INSERT로 들어와요: 이미 같은 이름으로 있는 내 프로필이면 통과 (예전부터 겹치던 이름 포함)
+  if tg_op = 'INSERT' and exists (select 1 from profiles where id = new.id and nickname = new.nickname) then return new; end if;
+  if exists (select 1 from profiles where id <> new.id and lower(replace(nickname, ' ', '')) = lower(replace(new.nickname, ' ', ''))) then
+    raise exception 'nick_taken';
+  end if;
+  if tg_op = 'UPDATE' then
+    if old.nick_changed_at is not null and old.nick_changed_at > now() - interval '7 days' then raise exception 'nick_wait'; end if;
+    new.nick_changed_at := now();
+  end if;
+  return new;
+end $$;
+drop trigger if exists nick_rules on profiles;
+create trigger nick_rules before insert or update of nickname on profiles for each row execute function nick_rules();
+create index if not exists profiles_nick_norm on profiles (lower(replace(nickname, ' ', '')));
+create index if not exists runs_user on runs (user_id, created_at desc);
+
+-- 경험치 · 기록 요약 (판 기록에서 계산 → 앱에서 마음대로 올릴 수 없음)
+-- 판 끝내기 10 + 도달 계급(소위 10 ~ 대장 55), 오늘의 기수 +30, 대항전 +20, 자유 플레이는 하루 5판까지만
+create or replace view profile_stats with (security_invoker = true) as
+with r as (
+  select user_id, mode, rank_index,
+         (created_at at time zone 'Asia/Seoul')::date as d,
+         row_number() over (partition by user_id, mode, (created_at at time zone 'Asia/Seoul')::date order by created_at) as nth
+  from runs
+)
+select user_id,
+       count(*)::int as runs,
+       count(*) filter (where rank_index >= 6)::int as generals,
+       count(*) filter (where rank_index = 9)::int as fourstars,
+       max(rank_index)::int as best_rank,
+       max(rank_index) filter (where mode = 'free')::int as best_free,
+       count(*) filter (where mode = 'daily')::int as daily_days,
+       count(*) filter (where mode = 'contest')::int as contest_weeks,
+       sum(case when mode = 'free' and nth > 5 then 0
+                else 20 + 5 * rank_index + case mode when 'daily' then 30 when 'contest' then 20 else 0 end end)::int as xp
+from r group by user_id;
+grant select on profile_stats to anon, authenticated;
+
+-- 오늘의 기수 날마다 순위 (인사기록카드 "오늘의 기수 최고")
+create or replace view daily_places with (security_invoker = true) as
+select user_id, day,
+       rank() over (partition by day order by rank_index desc, honor desc nulls last, years asc, created_at asc)::int as place,
+       count(*) over (partition by day)::int as total
+from runs where mode = 'daily';
+grant select on daily_places to anon, authenticated;
+
+-- 계정 삭제 (설정 화면): 내 기록 · 프로필 · 기수 소속을 지우고 로그인 계정도 지움
+create or replace function delete_me() returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid();
+begin
+  if me is null then raise exception 'not signed in'; end if;
+  delete from members where user_id = me;
+  delete from runs where user_id = me;
+  delete from guestbook where user_id = me;
+  delete from profiles where id = me;
+  delete from auth.users where id = me;
+end $$;
+revoke all on function delete_me() from public, anon;
+grant execute on function delete_me() to authenticated;

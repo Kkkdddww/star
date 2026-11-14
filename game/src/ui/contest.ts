@@ -206,7 +206,7 @@ export function viewTeam(c: CohortRow): string {
   const done = new Set(wr.map((r) => r.user_id));
   const notYet = members.filter((m) => !done.has(m.user_id));
   const score = pts.length ? teamScore(pts.map((x) => x.p)) : null;
-  const who = (x: { r: RunRow; p: number }, v: string) => `<div class="who">${insignia(x.r.final_rank as Rank, 18, false)}<span class="g"><b>${esc(nm(x.r.user_id))}</b><span>${x.r.final_rank} · 명예 ${x.r.honor ?? 0}</span></span><span class="v">${v}</span></div>`;
+  const who = (x: { r: RunRow; p: number }, v: string) => `<a class="who" href="#/p/${x.r.user_id}">${insignia(x.r.final_rank as Rank, 18, false)}<span class="g"><b>${esc(nm(x.r.user_id))}</b><span>${x.r.final_rank} · 명예 ${x.r.honor ?? 0}</span></span><span class="v">${v}</span></a>`;
 
   const created = new Date(c.created_at);
   const headDoc = `<section class="doc" style="margin-top:4px"><div class="thead">
@@ -236,7 +236,7 @@ export function viewTeam(c: CohortRow): string {
 
   const roster = mem.state === 'loading' ? loadingBox : `<p class="secx"><span>기수 명부</span><span>${members.length}명</span></p><section class="doc" style="margin-top:0"><div class="bd" style="padding:4px 16px">${members.map((m) => {
     const founding = new Date(m.joined_at).getTime() - created.getTime() < 86400000;
-    return `<div class="trow2 ${m.user_id === me ? 'me' : ''}"><span class="tn">${m.seq}</span><span class="g"><b>${esc(nm(m.user_id))}${m.user_id === c.created_by ? ' <span class="chip">기수장</span>' : ''}${m.user_id === me ? ' <span class="chip on">나</span>' : ''}</b><span>${founding ? '창설 동기 · ' : ''}${md(m.joined_at.slice(0, 10))} 입대</span></span></div>`;
+    return `<a class="trow2 ${m.user_id === me ? 'me' : ''}" href="#/p/${m.user_id}"><span class="tn">${m.seq}</span><span class="g"><b>${esc(nm(m.user_id))}${m.user_id === c.created_by ? ' <span class="chip">기수장</span>' : ''}${m.user_id === me ? ' <span class="chip on">나</span>' : ''}</b><span>${founding ? '창설 동기 · ' : ''}${md(m.joined_at.slice(0, 10))} 입대</span></span></a>`;
   }).join('')}</div></section>`;
 
   const hrows = hist.state === 'ok' ? hist.data : [];
@@ -279,8 +279,9 @@ export function viewAward(code: string, week: string, c: CohortRow | null): stri
     <div class="bar"><div class="two"><button class="btn line" data-act="copy-award">링크 복사</button><a class="btn" href="#/c/${code}" style="display:flex;align-items:center;justify-content:center;text-decoration:none">기수 페이지</a></div></div></div>`;
 }
 
-// ── 랭킹 닉네임 옆 약장 (대표 기수) ──
-const tagCache = new Map<string, { ribbon: number[] | null; no: number | null; name: string; cohort: string } | null>();
+// ── 랭킹 줄: 지금 닉네임 + 닉네임 옆 약장 (대표 기수) ──
+type Person = { nick: string | null; tag: { ribbon: number[] | null; no: number | null; name: string; cohort: string } | null };
+const people = new Map<string, Person | undefined>();
 const honorCache = new Map<string, Honors | null>();
 let queue = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -288,21 +289,27 @@ function flush() {
   const ids = [...queue]; queue = new Set(); timer = null;
   if (!ids.length) return;
   void teamTags(ids).then(async (rows) => {
-    for (const id of ids) tagCache.set(id, null);
-    for (const r of rows) if (r.cohorts && r.main_cohort) tagCache.set(r.id, { ...r.cohorts, cohort: r.main_cohort });
+    for (const id of ids) people.set(id, { nick: null, tag: null });
+    for (const r of rows) people.set(r.id, { nick: r.nickname, tag: r.cohorts && r.main_cohort ? { ...r.cohorts, cohort: r.main_cohort } : null });
     const cids = [...new Set(rows.map((r) => r.main_cohort).filter((x): x is string => !!x && !honorCache.has(x)))];
     if (cids.length) { const hs = await teamHonors(cids).catch(() => [] as Honors[]); for (const c of cids) honorCache.set(c, hs.find((h) => h.cohort_id === c) ?? null); }
     refresh();
-  }).catch(() => { for (const id of ids) tagCache.set(id, null); });
+  }).catch(() => { for (const id of ids) people.set(id, { nick: null, tag: null }); });
 }
-/** 닉네임 옆에 붙는 작은 기수 약장 (없으면 빈 문자열). 처음엔 비어 있다가 불러오면 다시 그린다 */
-export function teamTag(userId: string): string {
-  if (!tagCache.has(userId)) {
-    tagCache.set(userId, null);
+function person(userId: string): Person | undefined {
+  if (!people.has(userId)) {
+    people.set(userId, undefined);
     queue.add(userId);
     if (!timer) timer = setTimeout(flush, 30);
-    return '';
   }
-  const t = tagCache.get(userId);
+  return people.get(userId);
+}
+/** 랭킹 줄 이름: 지금 프로필 닉네임 (불러오기 전에는 판에 적힌 닉네임) */
+export const nameOf = (userId: string, fallback: string) => person(userId)?.nick ?? fallback;
+/** 닉네임 옆에 붙는 작은 기수 약장 (없으면 빈 문자열) */
+export function teamTag(userId: string): string {
+  const t = person(userId)?.tag;
   return t ? `<span class="ttag">${teamRibbon(t.ribbon, 22, honorCache.get(t.cohort) ?? null, `${t.no ?? ''}기 ${t.name}`)}</span>` : '';
 }
+/** 닉네임을 바꾼 뒤 다시 불러오기 */
+export function forgetPeople() { people.clear(); }
