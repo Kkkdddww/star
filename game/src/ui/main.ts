@@ -26,6 +26,7 @@ import { adSlot, initRewarded, mountAds, rewardedOn, showRewarded } from './ads'
 import { NOTICES, applySettings, footer, hasNewNotice, reduceMotion, setReduceMotion, settingsState } from './site';
 import { guestPreview, gs, cohortCached, cohortOpen, inviteData, rememberCohort } from './group';
 import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk, routeOf, rowHtml, saveNickname, setRerender, viewRoute, type CardData } from './social';
+import { loginState } from './login';
 import { forgetPeople, contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
 import { randomRibbon, teamRibbon } from './teamRibbon';
 import { AlreadyError, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
@@ -278,7 +279,7 @@ function lobbyTab(): LobbyTab {
 /** 로그인 권유 한 줄 (연결 전에만): 로비 · 전역 화면 */
 function loginRow(): string {
   if (loginInfo().linked) return '';
-  return `<a class="loginrow" href="#/settings"><span class="tx"><b>로그인하고 기록 지키기</b>기기를 바꿔도 호봉 · 기수 · 기록이 이어져요</span><span class="go">구글 · 카카오</span></a>`;
+  return `<a class="loginrow" href="#/login"><span class="tx"><b>로그인하고 기록 지키기</b>기기를 바꿔도 호봉 · 기수 · 기록이 이어져요</span><span class="go">구글 · 카카오</span></a>`;
 }
 
 /** 로비 맨 위: 내 카드 한 줄 (v3.3 인사기록카드 입구) */
@@ -1583,7 +1584,7 @@ root.addEventListener('click', (e) => {
     }
     case 'team-new': {
       if ((myTeamsNow()?.length ?? 0) >= MAX_TEAMS) { toast(`기수는 ${MAX_TEAMS}곳까지 들어갈 수 있어요`); break; }
-      if (!loginInfo().linked) { toast('기수 만들기는 로그인이 필요해요 · 기수장 자리를 지켜 줘요'); location.hash = '#/settings'; break; }
+      if (!loginInfo().linked) { toast('기수 만들기는 로그인이 필요해요 · 기수장 자리를 지켜 줘요'); location.hash = '#/login'; break; }
       Object.assign(cs, { name: '', motto: '', ribbon: randomRibbon(), pub: true, msg: '', busy: false, edit: null });
       location.hash = '#/contest/new'; break;
     }
@@ -1759,11 +1760,8 @@ root.addEventListener('click', (e) => {
     case 'open-card': location.hash = `#/card/${v}`; break;
     case 'open-person': location.hash = `#/p/${v}`; break;
     // v3.3 로그인
-    case 'auth-link': settingsState.authMsg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
-    case 'auth-signin': {
-      if (!confirm('다른 기기에서 쓰던 계정으로 로그인할까요? 이 기기에서 연결하지 않고 쌓은 서버 기록은 그 계정으로 옮겨지지 않아요.')) break;
-      track('login_signin', { provider: v }); signInProvider(v as Provider); break;
-    }
+    case 'auth-link': settingsState.authMsg = ''; loginState.msg = ''; track('login_link', { provider: v }); void linkProvider(v as Provider).catch((e) => { settingsState.authMsg = loginState.msg = e instanceof Error ? e.message : '연결하지 못했어요'; render(); }); break;
+    case 'auth-signin': loginState.conflict = null; track('login_signin', { provider: v }); signInProvider(v as Provider); break;
     case 'auth-logout': {
       if (!settingsState.confirmLogout) { settingsState.confirmLogout = true; render(); break; }
       logout(); invalidate(''); forgetPeople(); ui.lobbyTab = null; settingsState.confirmLogout = false; toast('로그아웃했어요'); location.hash = ''; break;
@@ -1845,9 +1843,9 @@ prefillGuest();
 applySettings();
 // v3.3 로그인 화면에서 돌아왔으면 토큰 저장
 const authBack = consumeAuthReturn();
-if (authBack) { ui.route = null; invalidate(''); }
+if (authBack) { ui.route = null; invalidate(''); if (authBack.conflict) { loginState.conflict = authBack.conflict; location.hash = '#/login'; ui.route = { name: 'login' }; } else if (!authBack.ok) loginState.msg = authBack.msg ?? ''; }
 render();
 if (authBack) {
   track(authBack.ok ? 'login_ok' : 'login_fail', { kind: authBack.kind });
-  toast(authBack.ok ? (authBack.kind === 'link' ? '연결했어요 · 이제 기기를 바꿔도 기록이 이어져요' : '로그인했어요') : authBack.msg ?? '로그인하지 못했어요');
+  if (!authBack.conflict) toast(authBack.ok ? (authBack.kind === 'link' ? '로그인했어요 · 이제 기기를 바꿔도 기록이 이어져요' : '로그인했어요') : authBack.msg ?? '로그인하지 못했어요');
 }

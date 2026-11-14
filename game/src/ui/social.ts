@@ -12,6 +12,7 @@ import { insignia } from './insignia';
 import { prepareCard } from './cardImage';
 import { viewGroup, viewGroupHub, viewGuestbook } from './group';
 import { viewPerson } from './person';
+import { viewLogin } from './login';
 import { forgetPeople, nameOf, teamTag, viewAward, viewContest, viewTeamForm } from './contest';
 import { ribbonRack } from './ribbon';
 
@@ -65,7 +66,7 @@ export function cardFromRow(r: RunRow): CardData {
 
 // ── 라우팅·데이터 ──
 export type Route = { name: 'card'; id: string } | { name: 'rank' } | { name: 'gallery' } | { name: 'group'; code: string | null } | { name: 'guestbook' } | { name: 'site'; page: SitePage }
-  | { name: 'contest' } | { name: 'team-form' } | { name: 'award'; code: string; week: string } | { name: 'person'; id: string } | null;
+  | { name: 'contest' } | { name: 'team-form' } | { name: 'award'; code: string; week: string } | { name: 'person'; id: string } | { name: 'login' } | null;
 export function routeOf(hash: string): Route {
   const m = hash.match(/^#\/card\/([\w-]+)/);
   if (m) return { name: 'card', id: m[1] };
@@ -73,6 +74,7 @@ export function routeOf(hash: string): Route {
   const aw = hash.match(/^#\/award\/([A-Za-z0-9]{6})\/(\d{4}-\d{2}-\d{2})/);
   if (aw) return { name: 'award', code: aw[1].toUpperCase(), week: aw[2] };
   if (hash.startsWith('#/contest/new')) return { name: 'team-form' };
+  if (hash.startsWith('#/login')) return { name: 'login' };
   const pm = hash.match(/^#\/p\/(me|[\w-]{2,40})/);
   if (pm) return { name: 'person', id: pm[1] };
   if (hash.startsWith('#/contest')) return { name: 'contest' };
@@ -237,6 +239,7 @@ export function viewRoute(r: NonNullable<Route>): string {
   if (r.name === 'guestbook') return viewGuestbook();
   if (r.name === 'contest') return viewContest();
   if (r.name === 'person') return viewPerson(r.id);
+  if (r.name === 'login') return viewLogin();
   if (r.name === 'team-form') return viewTeamForm();
   if (r.name === 'award') { const c = load(`grp:${r.code}`, () => getCohort(r.code)); return viewAward(r.code, r.week, c.state === 'ok' ? c.data : null); }
   return viewRank();

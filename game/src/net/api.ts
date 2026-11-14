@@ -71,25 +71,26 @@ export async function linkProvider(p: Provider): Promise<void> {
     throw new Error(/manual linking/i.test(body) ? '계정 연결이 아직 꺼져 있어요 (운영 설정 필요)' : /provider/i.test(body) ? `${PROVIDER_NAME[p]} 로그인이 아직 준비 중이에요` : `연결하지 못했어요 ${res.status}`);
   }
   const { url } = await res.json();
-  try { localStorage.setItem(RETURN_KEY, 'link'); } catch { /* 무시 */ }
+  try { localStorage.setItem(RETURN_KEY, `link:${p}`); } catch { /* 무시 */ }
   location.href = url;
 }
 /** 다른 기기에서 쓰던 계정으로 로그인 (이 기기의 익명 기록은 이어지지 않음) */
 export function signInProvider(p: Provider) {
-  try { localStorage.setItem(RETURN_KEY, 'signin'); } catch { /* 무시 */ }
+  try { localStorage.setItem(RETURN_KEY, `signin:${p}`); } catch { /* 무시 */ }
   location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=${p}&redirect_to=${encodeURIComponent(backUrl())}`;
 }
 /** 로그인 화면에서 돌아왔을 때: 주소 뒤에 붙은 토큰을 저장하고 주소를 깨끗하게 */
-export function consumeAuthReturn(): { kind: 'link' | 'signin'; ok: boolean; msg?: string } | null {
-  const h = location.hash.replace(/^#/, '');
+export function consumeAuthReturn(): { kind: 'link' | 'signin'; ok: boolean; msg?: string; conflict?: Provider } | null {
+  const h = location.hash.replace(/^#/, '') + '&' + location.search.replace(/^\?/, '');
   if (!/access_token=|error=/.test(h)) return null;
   const q = new URLSearchParams(h);
-  let kind: 'link' | 'signin' = 'link';
-  try { kind = (localStorage.getItem(RETURN_KEY) as 'link' | 'signin') ?? 'link'; localStorage.removeItem(RETURN_KEY); } catch { /* 무시 */ }
-  history.replaceState(null, '', location.pathname + location.search);
+  let kind: 'link' | 'signin' = 'link', prov: Provider | undefined;
+  try { const r = localStorage.getItem(RETURN_KEY) ?? 'link'; [kind, prov] = r.split(':') as ['link' | 'signin', Provider | undefined]; localStorage.removeItem(RETURN_KEY); } catch { /* 무시 */ }
+  history.replaceState(null, '', location.pathname);
   if (q.get('error')) {
     const d = q.get('error_description') ?? '';
-    return { kind, ok: false, msg: /already linked|already exists|identity_already_exists/i.test(d) ? '이미 다른 말뚝 계정에 연결된 계정이에요. 설정에서 "그 계정으로 로그인"을 눌러 주세요' : '로그인하지 못했어요. 다시 시도해 주세요' };
+    if (/already linked|already exists|identity_already_exists|identity is already/i.test(d)) return { kind, ok: false, conflict: prov ?? 'google', msg: '이미 말뚝 계정이 있는 로그인이에요' };
+    return { kind, ok: false, msg: `로그인하지 못했어요 · ${d.slice(0, 60) || '다시 시도해 주세요'}` };
   }
   const at = q.get('access_token'), rt = q.get('refresh_token');
   const p = at ? jwt(at) : null;
