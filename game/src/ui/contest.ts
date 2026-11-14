@@ -75,7 +75,7 @@ export function contestDoc(play: { label: string; act: string }): string {
   const head = `<div class="hd">
     <div class="dn">주간 공문 · ${docNo(week)} · ${md(week)}~${md(weekEnd(week))}${open ? ` · <b>D-${dLeft()}</b>` : ''}</div>
     <div class="tt">기수 대항전<em>${open ? `${rows.length}개 기수` : `첫 회차 ${md(CONTEST_FROM)}(월)`}</em></div>
-    ${!open && totalsText() ? `<p class="ds">지금까지 <b class="olive">${totalsText()}</b>이 모였어요</p>` : mine?.length ? '' : '<p class="ds">팀으로 겨루는 한 주 · 상위 10명 평균, 동기가 많을수록 유리해요</p>'}
+    ${!open && totalsText() ? `<p class="ds">지금까지 <b class="olive">${totalsText()}</b>이 모였어요</p>` : mine?.length ? '' : '<p class="ds">기수끼리 겨루는 한 주 · 상위 10명 평균</p>'}
   </div>`;
   let body = '';
   if (mine?.length) {
@@ -89,14 +89,14 @@ export function contestDoc(play: { label: string; act: string }): string {
   if (rows.length) {
     body += `<div class="lk"><span>이번 주 순위</span><a href="#/contest">전체 ›</a></div>`;
     body += rows.slice(0, 3).map((r, i) => teamRow({ n: r.place ?? i + 1, ribbon: r.ribbon, name: r.name, sub: `${r.no ?? '-'}기 · 전역 ${r.n}명`, right: scoreCell(r.score), href: `#/c/${r.code}`, hon: honorOf(ids, r.cohort_id), w: 36 })).join('');
-  } else if (open) body += `<p class="sub" style="margin-top:8px">아직 순위에 오른 기수가 없어요. 전역 2명이면 순위에 올라요.</p>`;
+  } else if (open) body += `<p class="sub" style="margin-top:8px">아직 순위가 없어요 · 전역 2명부터 올라요</p>`;
   else if (!mine?.length) body += `<p class="sub" style="margin-top:4px">${md(CONTEST_FROM)}(월) 0시부터 매주 열려요. 지금 기수를 만들거나 들어가 두세요.</p>`;
   const btns = mine?.length
     ? `<div class="two"><button class="btn line" data-act="grp-share" data-v="${mine[0].cohorts.code}">동기 부르기</button><button class="btn" data-act="${play.act}" ${open ? '' : 'disabled'}>${open ? play.label : `${md(CONTEST_FROM)}부터 출전`}</button></div>`
     : `<div class="two"><button class="btn line" data-act="team-new">기수 만들기</button><button class="btn" data-act="team-random">아무 기수나 들어가기</button></div>`;
   const pubN = load('contest:public', async () => { const ts = await publicTeams(); return { ts, cnt: await memberCounts(ts.map((t) => t.id)) }; });
   const pubCount = pubN.state === 'ok' ? pubN.data.ts.filter((t) => (pubN.data.cnt[t.id] ?? 0) < t.max_members).length : null;
-  const go = `<a class="golink" href="#/contest"><span class="g"><b>대항전 전체 보기</b><span>전체 순위 · ${pubCount ? `공개 기수 ${pubCount}곳` : '공개 기수'} · 지난주 표창 · 포상 규칙</span></span>${chev}</a>`;
+  const go = `<a class="golink" href="#/contest"><span class="g"><b>대항전 전체 보기</b><span>순위 · ${pubCount ? `공개 기수 ${pubCount}곳` : '공개 기수'} · 지난주 표창</span></span>${chev}</a>`;
   return `<section class="doc lcard">${head}<div class="bd">${body}${go}${btns}
     <p class="lmore"><a href="#/cohort">친선 기수 (7일 한 판) ›</a></p></div></section>`;
 }
