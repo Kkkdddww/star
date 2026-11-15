@@ -1,6 +1,7 @@
 // v3.3 기수 대항전 화면: 대항전(#/contest), 기수 만들기(#/contest/new), 대항전 기수 페이지(#/c/코드), 표창장(#/award/코드/주)
 // 로비의 대항전 문서, 전역 화면의 팀 반영, 랭킹 닉네임 옆 약장도 여기서 만든다
 import { CONTEST_FROM, contestOpen, crowdBonus, EMPTY_SLOT, TOP_N, daysLeftInWeek, MAX_TEAMS, personScore, teamScore, weekEnd, weekNo, weekOf, prevWeek } from '../engine/contest';
+import { cleanNick } from '../data/banned';
 import type { Rank } from '../engine/types';
 import { hobongOf } from '../engine/hobong';
 import {
@@ -314,7 +315,7 @@ function person(userId: string): Person | undefined {
   return people.get(userId);
 }
 /** 랭킹 줄 이름: 지금 프로필 닉네임 (불러오기 전에는 판에 적힌 닉네임) */
-export const nameOf = (userId: string, fallback: string) => person(userId)?.nick ?? fallback;
+export const nameOf = (userId: string, fallback: string) => cleanNick(person(userId)?.nick ?? fallback);
 /** 닉네임 옆에 붙는 작은 기수 약장 (없으면 빈 문자열) */
 export function teamTag(userId: string): string {
   const t = person(userId)?.tag;

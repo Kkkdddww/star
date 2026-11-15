@@ -1,5 +1,6 @@
 // Supabase 연결 (라이브러리 없이 REST로 직접). 공개용 키만 쓴다. service_role 키는 절대 여기 넣지 않는다.
 // 데이터 보호는 Supabase 쪽 행 단위 권한(RLS)이 맡는다: 누구나 읽기, 쓰기는 본인 것만.
+import { hasBanned } from '../data/banned';
 export const SUPABASE_URL = 'https://mbjmppksxxfdbeuywepf.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_h_WjpVGOQxVO-pXLZdRvww_iINPqsMa';
 
@@ -133,6 +134,7 @@ async function rest<T>(path: string, init: RequestInit = {}, auth = false): Prom
     else if (/runs_contest_once/i.test(body)) throw new AlreadyError('이번 주 대항전 판은 이미 올렸어요');
     else if (/nick_taken/.test(body)) throw new Error('이미 다른 사람이 쓰는 닉네임이에요');
     else if (/nick_wait/.test(body)) throw new Error('닉네임은 7일에 한 번 바꿀 수 있어요');
+    else if (/nick_banned/.test(body)) throw new Error('쓸 수 없는 단어가 있어요');
     else if (/3곳까지/.test(body)) throw new Error('기수는 3곳까지 들어갈 수 있어요');
     else if (/정원이 다/.test(body)) throw new Error('정원 30명이 다 찼어요');
     else if (/members_pkey|duplicate key/i.test(body) && path.startsWith('members')) throw new Error('이미 들어간 기수예요');
@@ -371,17 +373,15 @@ export function textProblem(t: string): string | null {
   if (/\d+\s*(사단|여단|연대|대대|군단|사령부|비행단|함대|중대|소대|포대)/.test(x)) return '실제 부대 이름은 쓸 수 없어요';
   if (/(https?:|www\.|\.com|\.kr|open\.kakao)/i.test(x)) return '링크는 쓸 수 없어요';
   if (/01[016789][-\s]?\d{3,4}[-\s]?\d{4}/.test(x)) return '연락처는 쓸 수 없어요';
-  if (BANNED.some((w) => x.replace(/\s/g, '').includes(w))) return '쓸 수 없는 단어가 있어요';
+  if (hasBanned(x)) return '쓸 수 없는 단어가 있어요';
   return null;
 }
 
-// ── 닉네임 검사: 욕설·실제 부대 번호 차단 ──
-const BANNED = ['시발', '씨발', '병신', '좆', '개새', '니미', '썅', '존나', '섹스', '운영자', '관리자'];
+// ── 닉네임 검사: 금칙어(src/data/banned.ts) · 사칭 차단. v3.3.7: 실제 부대 이름 막기는 닉네임에서 뺌(한마디 글은 그대로) ──
 export function nicknameProblem(n: string): string | null {
   const t = n.trim();
   if (t.length < 2 || t.length > 12) return '2~12자로 정해 주세요';
-  if (/\d+\s*(사단|여단|연대|대대|군단|사령부|비행단|함대|중대)/.test(t)) return '실제 부대 이름은 쓸 수 없어요';
-  if (BANNED.some((w) => t.replace(/\s/g, '').includes(w))) return '쓸 수 없는 단어가 있어요';
+  if (hasBanned(t)) return '쓸 수 없는 단어가 있어요';
   if (IMPERSONATE.test(t.replace(/\s/g, ''))) return '운영진으로 보이는 이름은 쓸 수 없어요';
   return null;
 }
