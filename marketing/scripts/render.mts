@@ -66,11 +66,11 @@ if (c) cards.card_poll = page(`${head('결 재 대 기')}
   <p class="h">당신이라면<br><span class="o">${esc(c.title)}</span></p>
   <p class="sub">${md(day)} ${num(c.total)}명이 이 결재를 받았어요</p>
   <div style="margin-top:20px">${[...c.options].sort((a: { key: string }, b: { key: string }) => a.key.localeCompare(b.key)).map((o: { label: string }, i: number) => `<div class="opt"><i>${'ABCD'[i]}</i>${esc(o.label)}</div>`).join('')}</div>
-  ${foot(`댓글로 골라 주세요<br><b>실제 결과는 ${md(new Date(Date.parse(day) + 86400e3).toISOString().slice(0, 10))} 공개</b>`, '<div class="stamp olive"><b>결재</b><i>대기</i></div>')}`);
+  ${foot(`댓글로 골라 주세요<br><b>실제 결과는 내일 공개</b>`, '<div class="stamp olive"><b>결재</b><i>대기</i></div>')}`);
 // 3. 어제 투표 결과 공개
 const pc = prev?.mostSplitChoice;
 if (pc) cards.card_reveal = page(`${head('결 재 결 과')}
-  <p class="h">${md(prevDay)} 투표<br><span class="o">${esc(pc.title)}</span></p>
+  <p class="h">${md(prevDay)} 가장 갈린 결재<br><span class="o">${esc(pc.title)}</span></p>
   <p class="sub">${md(prevDay)} 오늘의 기수에서 이 결재를 받은 ${num(pc.total)}명의 실제 선택이에요</p>
   ${pc.options.map((o: { label: string; pct: number }) => `<div class="res"><p class="t">${esc(o.label)}<span>${o.pct}%</span></p><div class="bar"><div style="width:${o.pct}%"></div></div></div>`).join('')}
   ${foot('당신의 선택은 몇 %였나요?<br>malttuk.com', '<div class="stamp olive"><b>결재</b><i>완료</i></div>')}`);
