@@ -32,7 +32,7 @@ import { randomRibbon, teamRibbon } from './teamRibbon';
 import { AlreadyError, hideGuest, replyGuest, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
 
 // ───────── 저장 ─────────
-interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number; storyDone?: boolean }
+interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number }
 interface Meta { cleared: boolean; ribbons: Record<string, number[]>; titles: string[]; equipped: string | null; runs: number; bestRank?: number }
 const KEY = 'sowi-to-star-v2';
 const META_KEY = 'sowi-to-star-meta-v2';
@@ -121,7 +121,6 @@ const ui = {
   sheet: null as Sheet,
   draftFocus: [] as StatKey[],
   report: null as YearReport | null,
-  story: 0,
   queue: [] as Screen[],
   assignFrom: null as string | null,
   firstPost: false,
@@ -1243,36 +1242,7 @@ function uploadBox(): string {
   </div>`;
 }
 
-/** v3.4 전역 이야기: 한 장에 한 문장씩 (처음 한 번만, 건너뛰기 가능) */
-function storySlides(g: GameState): { k: string; h: string; s: string }[] {
-  const me = g.me;
-  const d = endingCard(g);
-  const best = me.billets.map((id) => asg(id)).sort((a, b) => b.prestige - a.prestige)[0];
-  const promos = g.history.filter((h) => h.promotedTo);
-  const lastPromo = promos[promos.length - 1];
-  const rival = rivalOf(g);
-  const diff = rankCount(me.rank) - rankCount(rival.rank);
-  return [
-    { k: `${d.startYear}–${d.endYear} · ${me.age}세 전역`, h: `${esc(me.name)} ${me.rank}의<br>${d.years}년 군 생활이<br>끝났어요`, s: esc(g.ended!.reason) },
-    { k: '가장 높았던 자리', h: `${best ? best.name : '소대장'}`, s: lastPromo ? `${lastPromo.year}년 ${lastPromo.promotedTo} 진급 · 평정 '탁월' ${d.su}회` : `평정 '탁월' ${d.su}회` },
-    { k: '동기들 사이에서', h: d.pct >= 50 ? `동기 ${d.cohort}명과<br>같이 걸었어요` : `동기 ${d.cohort}명 중<br>상위 ${d.pct}%`, s: d.pct >= 50 ? `${me.rank} 이상 ${d.same}명 · 라이벌 ${esc(rival.name)} ${rival.rank}` : `라이벌 ${esc(rival.name)} · ${rival.rank}${diff > 0 ? ' · 내가 앞섰어요' : diff < 0 ? ' · 한발 늦었어요' : ' · 같은 계급'}` },
-    { k: '가슴에 남은 것', h: `약장 ${d.ribbons.length}개<br>표창 ${d.awards}회`, s: d.clean ? `무사고 지휘 ${d.clean}년` : me.log.incidents ? `중대 사건 ${me.log.incidents}건 중 원칙대로 ${me.log.principled}건` : '큰 사고 없이 마쳤어요' },
-  ];
-}
-function viewStory(g: GameState): string {
-  const sl = storySlides(g);
-  const i = Math.min(ui.story, sl.length - 1);
-  const x = sl[i];
-  return `<div class="page story">
-    <div class="prog">${sl.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</div>
-    <button class="skip" data-act="story-skip">건너뛰기</button>
-    <div class="st rise"><p class="k">${x.k}</p><h1>${x.h}</h1><p class="s">${x.s}</p></div>
-    <div class="bar"><button class="btn" data-act="story-next">${i === sl.length - 1 ? '전역 카드 받기' : '다음'}</button></div>
-  </div>`;
-}
-
 function viewEnding(g: GameState): string {
-  if (!save!.storyDone && !save!.runId) return viewStory(g);
   applyMeta(g);
   const me = g.me;
   const rival = rivalOf(g);
@@ -1861,8 +1831,6 @@ root.addEventListener('click', (e) => {
       break;
     }
     case 'share-card': { const url = baseUrl() ? `${baseUrl()}#/card/${v}` : ''; const text = '말뚝 · 이 커리어 어때요? 너는 몇 성까지?'; if (lastCard) void shareCard(lastCard, text, url); else void shareLink(text, url); break; }
-    case 'story-next': if (ui.story >= storySlides(g!).length - 1) { save!.storyDone = true; ui.story = 0; persist(); } else ui.story += 1; render(); window.scrollTo(0, 0); break;
-    case 'story-skip': save!.storyDone = true; ui.story = 0; persist(); render(); window.scrollTo(0, 0); break;
     case 'go-dex': ui.tab = 'dex'; render(); window.scrollTo(0, 0); break;
     case 'back-ending': ui.tab = 'home'; render(); window.scrollTo(0, 0); break;
 
