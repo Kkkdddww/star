@@ -58,6 +58,7 @@ npm run qa        # 휴대폰 크기 브라우저로 주요 화면 열기 + 오�
 - `malttuk-balance`: 수치 변경 뒤 시뮬로 장군 비율 확인
 - `malttuk-design`: 화면·카드 디자인 규칙
 - `malttuk-writing`: 사건·이야기·엔딩 문구 규칙
+- `malttuk-marketing`: AI 마케팅 팀 운영 (매일 · 매주 홍보물, 팀 에이전트 `.claude/agents/mkt-*`, 제품 맥락 `.agents/product-marketing.md`). SNS 게시는 사용자가 직접
 
 ## 작업 방식
 - 사용자는 휴대폰으로 작업하고, 코드를 직접 읽기보다 결과를 본다. 설명은 짧고 쉽게, 한국어로.
