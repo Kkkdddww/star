@@ -61,7 +61,7 @@ footer.sitefoot{margin:20px 0 30px;background:#fff;border-radius:24px;padding:20
 
 function footer(): string {
   return `<footer class="sitefoot">
-    <div class="ftop"><div><p class="fn">말뚝</p><p>2년 말고 30년, 장교 커리어 시뮬레이션</p></div><a class="fver" href="/notice.html">v${NOTICES[0].id}</a></div>
+    <div class="ftop"><div><p class="fn">말뚝</p><p>진급할 것인가, 전역할 것인가. 장교 커리어 시뮬레이션</p></div><a class="fver" href="/notice.html">v${NOTICES[0].id}</a></div>
     <div class="fcols">
       <div><p class="fh">플레이</p><a href="/">게임 시작</a><a href="/#/rank">랭킹</a><a href="/notice.html">패치노트</a></div>
       <div><p class="fh">안내</p><a href="/about.html">게임 소개</a><a href="/guide.html">게임 가이드</a><a href="${FORM}" target="_blank" rel="noopener">문의</a></div>
@@ -105,7 +105,7 @@ const urls: string[] = [];
 
 // ── 게임 소개 ──
 urls.push(page('about', '게임 소개', '말뚝은 소위로 임관해 장군이 되기까지, 장교의 30년 커리어를 한 번에 1년씩 보내는 웹 육성 시뮬레이션 게임이에요.', [['', '게임 소개']],
-  hero('게임 소개', '2년 말고 30년,<br>말뚝은 이런 게임이에요', '소위로 임관해서 별을 달기까지, 장교 인생을 버튼 한 번에 1년씩 보내는 커리어 시뮬레이션이에요. 설치 없이 모바일과 PC 브라우저에서 바로 열리고, 한 판은 10분 정도 걸려요.') +
+  hero('게임 소개', '진급할 것인가, 전역할 것인가.<br>말뚝은 이런 게임이에요', '소위로 임관해서 별을 달기까지, 장교 인생을 버튼 한 번에 1년씩 보내는 커리어 시뮬레이션이에요. 설치 없이 모바일과 PC 브라우저에서 바로 열리고, 한 판은 10분 정도 걸려요.') +
   sec('어떻게 진행되나요', `<p>게임은 지원서를 내는 순간 시작돼요. 출신과 능력치 분포가 서로 다른 후보 세 명 가운데 한 명을 골라 사관학교, 학군단, 학사장교 과정, 3사관학교 중 한 곳에 들어가요. 생도 시절에 집중해서 키울 능력치를 정하고, 졸업 석차에 따라 병과가 정해지면 소위로 임관해요.</p>
     <p>임관하면 같은 해에 임관한 동기 30명과 함께 커리어가 시작돼요. 한 해 동안 결재함에 올라오는 일을 처리하고, 연말에 근무평정을 받고, 때가 되면 진급 심사를 기다려요. 2년마다 정기 인사로 보직이 바뀌고, 어떤 보직을 거쳤는지가 다음 진급을 좌우해요.</p>
     <p>끝까지 버티면 별을 달 수도 있고, 진급 심사에서 계속 떨어지면 계급정년으로 전역하게 돼요. 전역하면 최종 계급, 최고 보직, 받은 약장과 운 지수가 담긴 전역 카드가 나오고, 명예의 전당이나 오늘의 기수 순위에 올려 다른 사람과 비교할 수 있어요.</p>`) +
