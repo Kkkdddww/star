@@ -11,6 +11,7 @@ export const SITE_PAGES: SitePage[] = ['notice', 'about', 'guide', 'privacy', 't
 
 // ── 공지·패치노트 (위가 최신) ──
 export const NOTICES: { id: string; date: string; title: string; items: string[] }[] = [
+  { id: '3.3.6', date: '2026.11.15', title: '홈 화면 앱', items: ['말뚝을 휴대폰 홈 화면에 추가할 수 있어요. 아이콘을 누르면 주소창 없이 앱처럼 열려요', '안드로이드는 로비의 "홈 화면에 말뚝 추가"를 누르면 바로 설치돼요. 아이폰은 Safari 공유 버튼 → 홈 화면에 추가 (설정에 안내가 있어요)', '아이폰은 홈 화면 앱과 Safari의 저장 공간이 따로예요. 로그인해 두면 기록이 그대로 이어져요'] },
   { id: '3.3.5', date: '2026.11.14', title: '화면 정리 · 전역 이야기', items: ['복무 화면의 터닝포인트 · 결재함 · 올해 일정을 "올해 업무" 목록 하나로 모았어요. 처리해야 할 일에는 빨간 점이 붙어요', '줄마다 제목과 설명 한 줄만 보여요. 보직 자세한 내용과 터닝포인트 설명은 눌러서 봐요', '희망 조사서 · 인사명령 · 전입 신고의 글을 줄였어요. 부대 설명은 고른 자리만 보여요', '인사기록 탭에 연도별 기록이 한 해 한 줄로 들어왔어요 (약장 탭에서 옮김)', '전역하면 4장짜리 이야기가 먼저 나와요. 건너뛸 수 있어요', '로비 문구를 줄였어요', '복무 카드에서 이름이 세로로 깨지던 문제를 고쳤어요'] },
   { id: '3.3.4', date: '2026.11.14', title: '진급 심사 개편', items: ['진급 점수에 공적이 들어가요. 최근 4년 동안 받은 표창 1개 +5, 큰 표창 +10, 지휘 보직 무사고 1년 +3, 임기 목표 달성 +6(기본 40, 최대 100). 대위 심사부터 15% 비중이에요', '잠재력 차이를 더 줄였어요. 성장 속도 차이가 작아지고, 잠재력 한계에 가까워져도 성장이 멈추지 않아요. C도 선택을 잘하면 별을 달 수 있어요', '낙천하면 커트라인과 몇 점 차인지, 무엇을 올리면 되는지 알려줘요. 이미 높은 항목은 탓하지 않아요', '장성 심사를 조금 열었어요. 목표는 준장 이상 약 8~10%, 중장 이상 약 1%, 대장 약 0.5%예요'] },
   { id: '3.3', date: '2026.11.14', title: '기수 대항전 · 로그인 · 인사기록카드', items: ['기수 대항전이 11월 16일(월)부터 매주 열려요. 대항전 기수는 계속 가는 팀이고, 이름 · 구호 · 기수 약장(240가지) · 기수 번호가 있어요', '한 사람 한 주 한 판, 그 판이 내가 속한 기수(최대 3곳) 점수에 모두 들어가요. 팀 점수는 상위 10명 평균(10명이 안 되면 빈자리는 300점) + 11번째 동기부터 1명당 +2. 혼자라면 \'아무 기수나 들어가기\'', '1~3위 기수는 표창장을 받고, 기수 약장에 별과 금테가 붙어요. 랭킹에서 닉네임 옆에 대표 기수 약장이 보여요', '구글 · 카카오로 계정을 연결하면 기기를 바꿔도 기록 · 호봉 · 기수가 이어져요. 기수 만들기는 로그인이 필요해요', '랭킹에서 사람을 누르면 인사기록카드가 열려요. 호봉, 소속 기수, 오늘의 기수 최고 순위, 대항전 기록, 약장을 볼 수 있어요', '호봉: 판을 끝낼 때마다 경험치가 쌓여요(자유 플레이는 하루 5판까지). 능력치에는 영향이 없어요', '닉네임은 계정마다 하나로 고정돼요. 바꾸기는 인사기록카드에서 7일에 한 번, 새 이름은 다른 사람과 겹칠 수 없어요', '로비가 바뀌었어요. 매일 · 매주 · 언제나 세 모드를 한눈에 보고, 모드마다 순위를 바로 볼 수 있어요'] },
@@ -36,6 +37,40 @@ export const reduceMotion = () => { try { return localStorage.getItem(MOTION_KEY
 export function setReduceMotion(on: boolean) {
   try { localStorage.setItem(MOTION_KEY, on ? '1' : '0'); } catch { /* 무시 */ }
   document.documentElement.classList.toggle('calm', on);
+}
+// ── 홈 화면 앱(PWA) ──
+type InstallEvt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+let installEvt: InstallEvt | null = null;
+const APP_HIDE = 'malttuk-app-hide';
+export const isStandalone = () => { try { return matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true; } catch { return false; } };
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+/** 앱 시작 때 한 번: 서비스 워커 등록 + 설치 제안 이벤트 잡기 */
+export function initApp(onChange: () => void) {
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e as InstallEvt; onChange(); });
+  window.addEventListener('appinstalled', () => { installEvt = null; onChange(); });
+}
+/** 설치 버튼: 안드로이드 · PC 크롬은 바로 설치 창, 아이폰은 설정의 안내로 */
+export async function installApp(): Promise<'ok' | 'no' | 'guide'> {
+  if (!installEvt) return 'guide';
+  await installEvt.prompt();
+  const r = await installEvt.userChoice.catch(() => ({ outcome: 'dismissed' }));
+  installEvt = null;
+  return r.outcome === 'accepted' ? 'ok' : 'no';
+}
+export const hideAppRow = () => { try { localStorage.setItem(APP_HIDE, '1'); } catch { /* 무시 */ } };
+/** 로비 한 줄: 설치할 수 있을 때만 (이미 앱이거나 닫았으면 안 보임) */
+export function appRow(): string {
+  let hidden = false; try { hidden = localStorage.getItem(APP_HIDE) === '1'; } catch { /* 무시 */ }
+  if (hidden || isStandalone() || !(installEvt || isIOS())) return '';
+  return `<div class="approw"><button class="g" data-act="app-install"><img src="/favicon-192.png" alt="" width="36" height="36"><span><b>홈 화면에 말뚝 추가</b><span>앱처럼 아이콘으로 바로 열려요</span></span></button><button class="x" data-act="app-hide" aria-label="닫기">닫기</button></div>`;
+}
+function appSection(): string {
+  const body = isStandalone() ? '<p class="sub">홈 화면 앱으로 실행 중이에요</p>'
+    : installEvt ? '<button class="setrow" data-act="app-install"><span><b>홈 화면에 추가</b><span>앱처럼 아이콘으로 바로 열려요. 저장 공간은 거의 안 써요</span></span></button>'
+    : isIOS() ? '<p class="sub">Safari 아래쪽 <b>공유 버튼</b>을 누르고 <b>홈 화면에 추가</b>를 고르면 돼요. 카카오톡 · 인스타그램 안에서 열었다면 먼저 Safari로 열어 주세요</p>'
+    : '<p class="sub">브라우저 메뉴(⋮)에서 <b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 고르면 돼요</p>';
+  return `<section class="doc" id="appinst" style="margin:0 0 10px"><div class="hd"><span>홈 화면 앱</span></div><div class="bd">${body}</div></section>`;
 }
 export const applySettings = () => document.documentElement.classList.toggle('calm', reduceMotion());
 export const settingsState = { confirmWipe: false, msg: '', confirmDelete: false, confirmLogout: false, authMsg: '' };
@@ -124,6 +159,7 @@ function viewSettings(): string {
       ${acct}
       ${settingsState.authMsg ? `<p class="small" style="margin-top:8px;color:var(--red)">${settingsState.authMsg}</p>` : ''}
     </div></section>
+    ${appSection()}
     <section class="doc" style="margin:0 0 10px"><div class="bd">
       <button class="setrow" data-act="set-motion"><span><b>움직임 줄이기</b><span>훈장·진급 연출과 애니메이션을 최소로 해요</span></span><i class="tog ${on ? 'on' : ''}"></i></button>
     </div></section>
