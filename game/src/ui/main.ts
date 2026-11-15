@@ -23,7 +23,7 @@ import { ribbonRack, ribbonSvg } from './ribbon';
 import { prepareCard, saveCardImage, shareCardImage } from './cardImage';
 import { medalSvg, metalOf } from './medal';
 import { adSlot, initRewarded, mountAds, rewardedOn, showRewarded } from './ads';
-import { NOTICES, appRow, applySettings, footer, hasNewNotice, hideAppRow, initApp, installApp, reduceMotion, setReduceMotion, settingsState } from './site';
+import { NOTICES, isStandalone, appRow, applySettings, footer, hasNewNotice, hideAppRow, initApp, installApp, reduceMotion, setReduceMotion, settingsState } from './site';
 import { guestPreview, gs, cohortCached, cohortOpen, inviteData, rememberCohort } from './group';
 import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk, routeOf, rowHtml, saveNickname, setRerender, viewRoute, type CardData } from './social';
 import { loginState } from './login';
@@ -164,6 +164,7 @@ const ICON: Record<string, string> = {
   back: '<path d="M15 6l-6 6 6 6"/>',
   trophy: '<path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 13v4M8 20h8"/>',
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
   star: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>',
 };
 const icon = (name: string, size = 18) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
@@ -339,6 +340,9 @@ function freeDoc(live: GameState | null): string {
   </div></section>`;
 }
 
+/** 홈 화면 앱에만: 새로고침 (브라우저에는 자체 새로고침이 있어서 안 보임). 진행은 기기에 저장돼 있어 그대로 */
+const reloadBtn = () => (isStandalone() ? `<button class="iconbtn" data-act="app-reload" aria-label="새로고침">${icon('refresh', 20)}</button>` : '');
+
 function viewLobby(): string {
   const free = peek('free')?.game ?? null;
   const live = free && !free.ended ? free : null;
@@ -359,11 +363,12 @@ function viewLobby(): string {
   return `
   <div class="page">
     <header class="top lobbyhd"><span class="t">말뚝</span><span class="sp"></span>
+      ${reloadBtn()}
       <a class="iconbtn" href="#/notice" aria-label="공지">${icon('bell', 20)}${hasNewNotice() ? '<i class="dot"></i>' : ''}</a>
       <button class="iconbtn" data-act="route-rank" aria-label="랭킹">${icon('trophy', 20)}</button>
       <a class="iconbtn" href="#/settings" aria-label="설정">${icon('gear', 20)}</a></header>
     ${guestPreview()}
-    <main class="stack" style="padding-bottom:${primary ? 120 : 32}px">
+    <main class="stack" style="padding-bottom:calc(${primary ? 120 : 32}px + env(safe-area-inset-bottom))">
       ${meCard(best)}
       ${loginRow()}
       <div class="tiles">
@@ -726,7 +731,7 @@ function shell(g: GameState, inner: string): string {
   const nav = (t: Tab, ic: string, label: string) => `<button class="nav ${ui.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}">${icon(ic, 20)}<span>${label}</span></button>`;
   return `
   <div class="page">
-    <header class="top"><span class="t">말뚝</span><span class="yr">${g.year}년</span><span class="sp"></span><button class="iconbtn" data-act="go-lobby" aria-label="로비">${icon('home', 20)}</button><button class="iconbtn" data-act="open-reset" aria-label="설정">${icon('gear', 20)}</button></header>
+    <header class="top"><span class="t">말뚝</span><span class="yr">${g.year}년</span><span class="sp"></span>${reloadBtn()}<button class="iconbtn" data-act="go-lobby" aria-label="로비">${icon('home', 20)}</button><button class="iconbtn" data-act="open-reset" aria-label="설정">${icon('gear', 20)}</button></header>
     <main class="stack">${inner}</main>
     <nav class="tabbar">${nav('home', 'home', '복무')}${nav('record', 'file', '인사기록')}${nav('cohort', 'people', '동기')}${nav('dex', 'ribbon', '약장')}</nav>
     ${sheet(g)}
@@ -1777,6 +1782,7 @@ root.addEventListener('click', (e) => {
     }
     case 'route-home': location.hash = ''; break;
     case 'app-install': void installApp().then((r) => { track('app_install', { result: r }); if (r === 'guide') location.hash = '#/settings'; else if (r === 'ok') toast('홈 화면에 추가했어요'); render(); }); break;
+    case 'app-reload': location.reload(); break;
     case 'app-hide': hideAppRow(); render(); break;
     case 'set-motion': setReduceMotion(!reduceMotion()); render(); break;
     case 'set-wipe':

@@ -11,6 +11,7 @@ export const SITE_PAGES: SitePage[] = ['notice', 'about', 'guide', 'privacy', 't
 
 // ── 공지·패치노트 (위가 최신) ──
 export const NOTICES: { id: string; date: string; title: string; items: string[] }[] = [
+  { id: '3.3.8', date: '2026.11.15', title: '화면 확대 문제 · 홈 화면 앱 다듬기', items: ['버튼을 빠르게 두 번 누르면 화면이 확대되던 문제를 고쳤어요 (특히 아이폰)', '랭킹 날짜 고르기를 누를 때 화면이 커지던 문제를 고쳤어요', '아이폰 홈 화면 앱에서 아래쪽 버튼이 홈 막대에 가리지 않게 했어요', '홈 화면 앱 오른쪽 위에 새로고침 버튼이 생겼어요. 30분 넘게 안 보다가 다시 열면 알아서 최신 버전으로 새로 불러와요. 진행 중인 판은 그대로예요'] },
   { id: '3.3.7', date: '2026.11.15', title: '닉네임 · 한마디 금칙어 강화', items: ['욕설 · 성적 표현 · 혐오 · 비하 표현, 정치인 이름을 닉네임 · 기수 이름 · 한마디에 쓸 수 없어요. 띄어쓰기나 숫자 · 기호를 섞어도 걸러요', '이미 쓰고 있는 닉네임에 금칙어가 있으면 랭킹에 "익명 장교"로 보이고, 다음 전역 때 새 닉네임을 정하게 돼요', '닉네임에 숫자 + 부대 단위(예: 3대대)를 쓸 수 있게 됐어요'] },
   { id: '3.3.6', date: '2026.11.15', title: '홈 화면에 말뚝 앱을 추가할 수 있어요', items: [
     '말뚝을 휴대폰 홈 화면에 앱처럼 추가할 수 있어요. 아이콘을 누르면 주소창 없이 바로 열려요. 앱스토어 설치가 아니라서 무료이고 저장 공간도 거의 안 써요',
@@ -56,6 +57,12 @@ export function initApp(onChange: () => void) {
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e as InstallEvt; onChange(); });
   window.addEventListener('appinstalled', () => { installEvt = null; onChange(); });
+  // 홈 화면 앱은 새로고침 버튼이 없다: 30분 넘게 다른 앱에 있다 돌아오면 새로 불러와 최신 판으로 (진행은 기기에 저장돼 있어 그대로)
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (isStandalone() && hiddenAt && Date.now() - hiddenAt > 30 * 60 * 1000 && !document.querySelector('input:focus, textarea:focus')) location.reload();
+  });
 }
 /** 설치 버튼: 안드로이드 · PC 크롬은 바로 설치 창, 아이폰은 설정의 안내로 */
 export async function installApp(): Promise<'ok' | 'no' | 'guide'> {
