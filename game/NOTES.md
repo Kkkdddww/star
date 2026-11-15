@@ -214,4 +214,4 @@
 - 홈 화면 앱(standalone)에서만 로비 · 게임 머리줄 오른쪽 위에 새로고침 버튼(`reloadBtn`, 아이콘 refresh). 브라우저에서는 안 보임.
 
 ## 슬로건 변경 (2026-11-15)
-- 사용자 결정: '2년 말고 30년' → **'임관부터 전역까지, 내 장교 인생 시뮬레이션'**(짧게는 '임관부터 전역까지.'). meta description · og:description · noscript · 푸터 · 게임 소개 · README · og.png(첫 줄만 다시 그림) · SNS 배너(docs/brand).
+- 사용자 결정: '2년 말고 30년' → '임관부터 전역까지'(잠깐) → **'진급할 것인가, 전역할 것인가.'** (부제 '장교 커리어 시뮬레이션'). meta description · og:description · noscript · 푸터 · 게임 소개 · README · og.png(첫 줄만 다시 그림) · SNS 배너(docs/brand).
