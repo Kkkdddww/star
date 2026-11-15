@@ -1,6 +1,6 @@
 // 베타: 빌드 결과를 저장소 맨 위 beta/ 폴더로 복사한다 (malttuk.com/beta). 실행: npm run deploy:beta (game 폴더에서)
 // 지금 사이트(맨 위 index.html)는 건드리지 않는다. 검색 노출 · 방문 통계 · 광고는 끈다. 서버(Supabase)는 실제 서버를 같이 쓴다.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 let html = readFileSync('dist/index.html', 'utf8');
 html = html
   .replace('<meta name="ga-id" content="G-ZNK1Y11H3B">', '<meta name="ga-id" content="">')
@@ -11,4 +11,6 @@ html = html
 if (!html.includes('noindex')) throw new Error('베타 표시를 넣지 못했어요 (template 확인)');
 mkdirSync('../beta', { recursive: true });
 writeFileSync('../beta/index.html', html);
+// 홈 화면 앱 파일(아이콘 · manifest · 서비스 워커)은 맨 위에 있어야 해서 같이 복사. 지금 사이트 index.html은 이 파일을 안 불러서 영향 없음
+cpSync('web/static', '..', { recursive: true });
 console.log('베타 복사 완료 → beta/index.html (malttuk.com/beta)');

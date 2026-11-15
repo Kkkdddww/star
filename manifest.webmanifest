@@ -1,0 +1,18 @@
+{
+  "name": "말뚝 · 장교 커리어 시뮬레이션",
+  "short_name": "말뚝",
+  "description": "한 번 누르면 1년. 소위에서 시작해 별을 다는 장교 커리어 시뮬레이션",
+  "lang": "ko",
+  "id": "/",
+  "start_url": "/?src=app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F2F3F0",
+  "theme_color": "#F2F3F0",
+  "icons": [
+    { "src": "/favicon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

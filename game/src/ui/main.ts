@@ -23,7 +23,7 @@ import { ribbonRack, ribbonSvg } from './ribbon';
 import { prepareCard, saveCardImage, shareCardImage } from './cardImage';
 import { medalSvg, metalOf } from './medal';
 import { adSlot, initRewarded, mountAds, rewardedOn, showRewarded } from './ads';
-import { NOTICES, applySettings, footer, hasNewNotice, reduceMotion, setReduceMotion, settingsState } from './site';
+import { NOTICES, appRow, applySettings, footer, hasNewNotice, hideAppRow, initApp, installApp, reduceMotion, setReduceMotion, settingsState } from './site';
 import { guestPreview, gs, cohortCached, cohortOpen, inviteData, rememberCohort } from './group';
 import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk, routeOf, rowHtml, saveNickname, setRerender, viewRoute, type CardData } from './social';
 import { loginState } from './login';
@@ -373,6 +373,7 @@ function viewLobby(): string {
         ${tile('f', 'swap', '언제나', '자유 플레이', fSub)}
       </div>
       ${tab === 'd' ? dailyDoc() : tab === 'c' ? contestDoc(play) : freeDoc(live)}
+      ${appRow()}
       ${hasNewNotice() ? `<a class="newnote" href="#/notice"><span class="nb">NEW</span><span><b>패치노트 v${NOTICES[0].id}</b><span>${NOTICES[0].title}</span></span>${icon('chev')}</a>` : ''}
       <div style="margin:12px 12px 0">${adSlot('lobby')}</div>
       <div style="margin:0 12px">${footer()}</div>
@@ -1805,6 +1806,8 @@ root.addEventListener('click', (e) => {
       break;
     }
     case 'route-home': location.hash = ''; break;
+    case 'app-install': void installApp().then((r) => { track('app_install', { result: r }); if (r === 'guide') location.hash = '#/settings'; else if (r === 'ok') toast('홈 화면에 추가했어요'); render(); }); break;
+    case 'app-hide': hideAppRow(); render(); break;
     case 'set-motion': setReduceMotion(!reduceMotion()); render(); break;
     case 'set-wipe':
       if (!settingsState.confirmWipe) { settingsState.confirmWipe = true; settingsState.msg = ''; render(); break; }
@@ -1917,6 +1920,7 @@ initAnalytics();
 initRewarded();
 prefillGuest();
 applySettings();
+initApp(() => render());
 // v3.3 로그인 화면에서 돌아왔으면 토큰 저장
 const authBack = consumeAuthReturn();
 if (authBack) { ui.route = null; invalidate(''); if (authBack.conflict) { loginState.conflict = authBack.conflict; location.hash = '#/login'; ui.route = { name: 'login' }; } else if (!authBack.ok) loginState.msg = authBack.msg ?? ''; }
