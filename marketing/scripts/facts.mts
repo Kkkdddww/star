@@ -1,7 +1,7 @@
 // 마케팅 팀 데이터 분석관용: 오늘의 기수 · 대항전 공개 기록에서 홍보에 쓸 사실을 뽑아 marketing/out/<날짜>/facts.json 으로 저장.
 // 실행 (game 폴더에서): npx tsx ../marketing/scripts/facts.mts [YYYY-MM-DD]
 // 서버에는 앱이 화면마다 하는 것과 같은 가벼운 조회만 한다 (그날 · 그 주로 좁힌 조회, count는 limit=1).
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { CHOICE_BY_ID } from '../../game/src/data/choices';
 import { cleanNick } from '../../game/src/data/banned';
 import { DIFFICULTY, fixedPotential } from '../../game/src/engine/candidates';
@@ -31,7 +31,9 @@ const top = await get<Run[]>(`runs?select=nickname,final_rank,honor,best_billet,
 
 // 결재 선택 비율: 가장 갈린 결재 (두 번째로 많이 고른 선택지 비율이 가장 높은 것, 30명 이상)
 type Stat = { def_id: string; option_key: string; n: number; ok: number };
-const stats = await get<Stat[]>(`daily_choice_stats?day=eq.${day}&select=def_id,option_key,n,ok`).catch((e) => { console.error(String(e)); return [] as Stat[]; });
+// 이 뷰는 무거워서 가끔 시간 초과(500)가 난다 → 10초 뒤 한 번만 다시. 여러 날짜를 연달아 돌리지 않는다
+const statsQ = `daily_choice_stats?day=eq.${day}&select=def_id,option_key,n,ok`;
+const stats = await get<Stat[]>(statsQ).catch(async () => { await new Promise((r) => setTimeout(r, 10000)); return get<Stat[]>(statsQ); }).catch((e) => { console.error('결재 비율 못 가져옴:', String(e)); return [] as Stat[]; });
 const byDef = new Map<string, Stat[]>();
 for (const s of stats) byDef.set(s.def_id, [...(byDef.get(s.def_id) ?? []), s]);
 const choices = [...byDef.entries()].map(([id, xs]) => {
@@ -45,6 +47,10 @@ const choices = [...byDef.entries()].map(([id, xs]) => {
   }).sort((a, b) => b.pct - a.pct);
   return { id, title: def ? deskText(id, 0).title : id, total, options: opts, split: opts[1]?.pct ?? 0 };
 }).filter((c) => c.total >= 30).sort((a, b) => b.split - a.split);
+// 어제 투표에 쓴 결재는 오늘 투표에서 빼기 (어제 결과 공개와 겹치면 답이 미리 보임)
+const prevDay = new Date(Date.parse(day) - 86400000).toISOString().slice(0, 10);
+const prevUsed = existsSync(`../marketing/out/${prevDay}/facts.json`) ? JSON.parse(readFileSync(`../marketing/out/${prevDay}/facts.json`, 'utf8')).mostSplitChoice?.id : null;
+const pool = choices.filter((c) => c.id !== prevUsed);
 
 // 대항전 (이번 주 순위 · 지난주 1~3위)
 const week = weekOf(day), last = weekOf(addDay(week, -1));
@@ -63,8 +69,8 @@ const facts = {
     generalPct: n ? Math.round((generals / n) * 1000) / 10 : 0,
     top: top.map((r, i) => ({ place: i + 1, name: cleanNick(r.nickname), rank: r.final_rank, honor: r.honor ?? 0, billet: r.best_billet, years: r.years, origin: r.origin })),
   },
-  mostSplitChoice: choices[0] ?? null,
-  otherChoices: choices.slice(1, 4),
+  mostSplitChoice: pool[0] ?? null,
+  otherChoices: pool.slice(1, 4),
   contest: { week, top: thisWeek, lastWeek: { week: last, top: lastWeek } },
   tomorrow: { day: tomorrow, difficulty: fpT ? DIFFICULTY[fpT] : null },
   link: 'https://malttuk.com/',
@@ -72,4 +78,4 @@ const facts = {
 const out = `../marketing/out/${day}`;
 mkdirSync(out, { recursive: true });
 writeFileSync(`${out}/facts.json`, JSON.stringify(facts, null, 2));
-console.log(`${out}/facts.json · 참가 ${n} · 장군 ${generals} · 대장 ${fourStar} · 가장 갈린 결재: ${choices[0]?.title ?? '-'}`);
+console.log(`${out}/facts.json · 참가 ${n} · 장군 ${generals} · 대장 ${fourStar} · 가장 갈린 결재: ${pool[0]?.title ?? '-'}`);

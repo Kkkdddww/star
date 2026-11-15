@@ -18,13 +18,13 @@ description: 말뚝 AI 마케팅 팀 운영 절차. 매일 · 매주 홍보물(S
 | 팀장 | 메인 세션 | 순서 정하기, 결과 모아 사장에게 보내기, 학습 기록 | 이 문서 |
 | 데이터 분석관 | `mkt-analyst` | 공개 기록에서 오늘의 사실 뽑기 (`facts.json`) | `marketing/scripts/facts.mts` |
 | 카피라이터 | `mkt-writer` | 채널별 글 (X · 스레드 · 인스타 · 오픈채팅), 투표 문구, 숏폼 대본 | social · copywriting 스킬 |
-| 디자이너 | `mkt-designer` | 카드 이미지 (결과 카드 · 투표 카드 · 표창장) | `marketing/templates/*.html` + Playwright |
+| 디자이너 | `mkt-designer` | 카드 이미지 (결과 카드 · 투표 카드 · 표창장) | `bash marketing/render.sh` (틀: `marketing/scripts/render.mts`) |
 | 검수관 | `mkt-editor` | 금지 사항 · 사실 · 말투 · 맞춤법 검사, 통과/반려 | copy-editing 스킬, 이 문서의 검수표 |
 
 ## 매일 루프 (밤 9시, 오늘의 기수 마감 3시간 전)
 1. **analyst**: `bash marketing/facts.sh` → `marketing/out/날짜/facts.json` (참가 수, 1~3위, 장군 수, 가장 갈린 결재, 내일 난이도)
 2. **writer**: facts.json만 근거로 글 3종 + 투표 1개 → `posts.md`
-3. **designer**: 결과 카드 1장 + 투표 카드 1장 → `card_result.png`, `card_poll.png` (1080×1350)
+3. **designer**: `bash marketing/render.sh` → 결과 카드 · 투표 카드 · 어제 투표 결과 카드 (`card_result.png`, `card_poll.png`, `card_reveal.png`, 1080×1350), 월요일엔 `card_award.png`
 4. **editor**: 검수표로 확인 → 통과하면 `review.md`에 "통과", 반려면 이유와 고친 문구
 5. **팀장**: 통과본을 사장에게 보낸다 (파일 + 글은 복사하기 쉽게 코드 블록). 다음 날 결과 공개용 "어제 투표 결과" 글도 같이
 
