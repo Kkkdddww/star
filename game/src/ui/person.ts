@@ -1,5 +1,6 @@
 // v3.3 인사기록카드 (#/p/아이디, #/p/me): 랭킹 · 기수 명부 어디서든 사람을 누르면 열린다
 import { RANKS } from '../data/config';
+import { cleanNick } from '../data/banned';
 import { hobongOf, serialLabel } from '../engine/hobong';
 import type { Rank } from '../engine/types';
 import { dailyBest, myId, profileOf, ribbonsOf, runsOf, sameNickCount, statsOf, teamHonors, teamsOf, type RunRow } from '../net/api';
@@ -47,7 +48,7 @@ export function viewPerson(idArg: string): string {
 
   const head = `<section class="doc card8"><div class="bd">
     <p class="faint">인사기록카드 · 군번 ${serialLabel(p.serial, p.created_at)}</p>
-    <div class="idrow">${insignia((bestRank >= 0 ? RANKS[bestRank] : '소위') as Rank, 30, false)}<div class="g"><p class="nm">${esc(p.nickname)}${own ? ' <span class="chip on">나</span>' : ''}</p><p class="sb">${p.equipped_title ? `칭호 '${esc(p.equipped_title)}' · ` : ''}${fav ? `${esc(fav[0])} 출신을 가장 많이 골라요` : '아직 기록이 적어요'}</p></div></div>
+    <div class="idrow">${insignia((bestRank >= 0 ? RANKS[bestRank] : '소위') as Rank, 30, false)}<div class="g"><p class="nm">${esc(cleanNick(p.nickname))}${own ? ' <span class="chip on">나</span>' : ''}</p><p class="sb">${p.equipped_title ? `칭호 '${esc(p.equipped_title)}' · ` : ''}${fav ? `${esc(fav[0])} 출신을 가장 많이 골라요` : '아직 기록이 적어요'}</p></div></div>
     <div class="hobong"><b>${hb.level}호봉</b><span>다음 호봉까지 ${hb.need - hb.into}</span></div>
     <div class="xpbar"><i style="width:${Math.round((hb.into / hb.need) * 100)}%"></i></div>
     <div class="grid3"><div><b>${st?.runs ?? rs.length}</b><span>판 수</span></div><div><b>${st?.generals ?? '-'}</b><span>장군 전역</span></div><div><b>${st?.fourstars ?? '-'}</b><span>대장</span></div></div>
@@ -77,7 +78,7 @@ export function viewPerson(idArg: string): string {
     const dup = load(`person:dup:${p.nickname}`, () => sameNickCount(p.nickname).catch(() => 1));
     const wait = p.nick_changed_at ? Math.ceil((new Date(p.nick_changed_at).getTime() + 7 * 86400000 - Date.now()) / 86400000) : 0;
     mine = `<p class="secx"><span>닉네임</span></p><section class="doc" style="margin-top:0"><div class="bd">
-      ${dup.state === 'ok' && dup.data > 1 ? `<p class="sub" style="margin-bottom:10px">'${esc(p.nickname)}'은 다른 사람도 쓰는 이름이에요. 겹치지 않는 이름으로 바꿔 볼까요?</p>` : ''}
+      ${dup.state === 'ok' && dup.data > 1 ? `<p class="sub" style="margin-bottom:10px">'${esc(cleanNick(p.nickname))}'은 다른 사람도 쓰는 이름이에요. 겹치지 않는 이름으로 바꿔 볼까요?</p>` : ''}
       <div style="display:flex;gap:8px"><input id="nick" class="inp" style="height:46px;background:var(--bg)" maxlength="12" placeholder="새 닉네임" value="${esc(rk.nick)}" ${wait > 0 ? 'disabled' : ''}><button class="btn" style="width:92px;height:46px" data-act="save-nick" ${wait > 0 ? 'disabled' : ''}>바꾸기</button></div>
       <p class="faint" style="margin-top:6px">${rk.nickMsg ? esc(rk.nickMsg) : wait > 0 ? `${wait}일 뒤에 바꿀 수 있어요` : '7일에 한 번 바꿀 수 있어요 · 예전 기록도 새 이름으로 보여요'}</p>
     </div></section>`;

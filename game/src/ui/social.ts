@@ -1,5 +1,6 @@
 // 공유·랭킹·갤러리·프로필 화면. 주소: #/card/<판번호>, #/rank, #/gallery
 import { adSlot } from './ads';
+import { cleanNick } from '../data/banned';
 import { SITE_PAGES, viewSite, type SitePage } from './site';
 import { ASSIGNMENTS, ORIGIN, RANKS } from '../data/config';
 import { RIBBONS, type Earned } from '../engine/meta';
@@ -35,7 +36,7 @@ export function cardHtml(d: CardData, button: string): string {
       <div class="hero">${insignia(d.finalRank, 92)}${d.ribbons.length ? ribbonRack(d.ribbons, 36, 4) : ''}</div>
       <p class="quote">“${esc(d.quote)}”</p>
       <p class="head"><span class="olive">${d.finalRank}</span>${ro(d.finalRank).slice(d.finalRank.length)} ${d.honor ? '명예롭게<br>' : ''}전역해요</p>
-      <p class="meta2">${esc(d.nickname)} · ${esc(d.origin)} · ${d.startYear}–${d.endYear} · ${d.years}년 복무</p>
+      <p class="meta2">${esc(cleanNick(d.nickname))} · ${esc(d.origin)} · ${d.startYear}–${d.endYear} · ${d.years}년 복무</p>
       <div class="big"><b>상위 ${d.pct}%</b><p>동기 ${d.cohort}명 중 ${d.finalRank} 이상까지 간 사람</p><span>${d.same}명 · 같은 해 임관한 동기 기준</span></div>
       <div class="three">
         <div><b>${d.su}회</b><span>평정 '탁월'</span></div>
@@ -202,7 +203,7 @@ function viewGallery(): string {
   else if (!st.data.length) body = '<div class="doc"><div class="bd" style="padding-top:22px"><p class="sub">아직 올라온 커리어가 없어요.</p></div></div>';
   else body = `<div class="gal">${st.data.map((r, i) => `${i && i % 8 === 0 && adSlot('gallery') ? `<div class="galad">${adSlot('gallery')}</div>` : ''}<button class="gcard" data-act="open-card" data-v="${r.id}">
       ${insignia(r.final_rank as Rank, 40)}
-      <b>${esc(r.nickname)}</b><span>${r.final_rank} · ${esc(r.best_billet ?? '')}</span><span class="faint">${r.years}년 · 약장 ${(r.ribbons ?? []).length}</span>
+      <b>${esc(cleanNick(r.nickname))}</b><span>${r.final_rank} · ${esc(r.best_billet ?? '')}</span><span class="faint">${r.years}년 · 약장 ${(r.ribbons ?? []).length}</span>
       ${r.quote ? `<i>“${esc(r.quote)}”</i>` : ''}</button>`).join('')}</div>`;
   return `<div class="page">${header('커리어 갤러리')}<main class="pad tight" style="padding-top:8px"><p class="sub" style="margin:0 4px 12px">방금 전역한 사람들의 커리어예요</p>${body}</main>
     <div class="bar"><button class="btn" data-act="route-home">나도 도전하기</button></div></div>`;
@@ -280,7 +281,7 @@ export function dailyCard(kind: 'count' | 'yesterday'): string {
   const st = load(`rank:daily:${y}:1`, () => dailyRanking(y, 1));
   if (st.state !== 'ok' || !st.data.length) return '';
   const r = st.data[0];
-  return `<p class="faint" style="margin-top:8px">어제 1위 · ${esc(r.nickname)} ${r.final_rank} · 명예 ${r.honor ?? 0}</p>`;
+  return `<p class="faint" style="margin-top:8px">어제 1위 · ${esc(cleanNick(r.nickname))} ${r.final_rank} · 명예 ${r.honor ?? 0}</p>`;
 }
 
 export interface DailyMine { day: string; rank_index: number; honor: number; years: number; log: { d?: string; k?: string; ok?: boolean | null }[] }

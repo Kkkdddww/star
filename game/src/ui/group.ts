@@ -1,5 +1,6 @@
 // 우리 기수(#/cohort, #/c/코드)와 방명록(#/guestbook) 화면
 import { CHOICE_BY_ID } from '../data/choices';
+import { cleanNick } from '../data/banned';
 import { RANKS } from '../data/config';
 import { deskText } from '../engine/choice';
 import type { Rank } from '../engine/types';
@@ -96,7 +97,7 @@ export function awards(rows: RunRow[]): string {
     ['행운아', best((r) => card(r)?.luck?.pct), (r) => `운 상위 ${Math.max(1, 100 - (card(r)?.luck?.pct ?? 50))}%`],
     ['불운아', best((r) => card(r)?.luck?.pct, true), (r) => `운 하위 ${Math.max(1, card(r)?.luck?.pct ?? 50)}%`],
   ];
-  return `<p class="sec">기수 시상</p><div class="doc" style="margin:0"><div class="bd" style="padding-top:16px">${list.filter(([, r]) => r).map(([t, r, f]) => `<div class="kv"><span>${t}</span><b>${esc(r!.nickname)} <span class="faint">${f(r!)}</span></b></div>`).join('')}</div></div>`;
+  return `<p class="sec">기수 시상</p><div class="doc" style="margin:0"><div class="bd" style="padding-top:16px">${list.filter(([, r]) => r).map(([t, r, f]) => `<div class="kv"><span>${t}</span><b>${esc(cleanNick(r!.nickname))} <span class="faint">${f(r!)}</span></b></div>`).join('')}</div></div>`;
 }
 
 export function viewGroup(code: string): string {
@@ -129,7 +130,7 @@ export function viewGroup(code: string): string {
 
   const myLog = (mineRow?.choices?.log ?? []) as Log;
   const forks = mineRow && rows.length > 1 ? `<p class="sec">갈림길</p><p class="faint" style="margin:-2px 4px 8px">같은 출발선에서 처음 다른 선택을 한 순간이에요</p>
-    <div class="doc" style="margin:0"><div class="bd" style="padding:6px 16px">${rows.filter((r) => r !== mineRow).slice(0, 10).map((r) => `<div class="line-item"><div class="tick"></div><div class="g"><b>${esc(r.nickname)} · ${r.final_rank}</b><span>${fork(myLog, (r.choices?.log ?? []) as Log)}</span></div></div>`).join('')}</div></div>` : '';
+    <div class="doc" style="margin:0"><div class="bd" style="padding:6px 16px">${rows.filter((r) => r !== mineRow).slice(0, 10).map((r) => `<div class="line-item"><div class="tick"></div><div class="g"><b>${esc(cleanNick(r.nickname))} · ${r.final_rank}</b><span>${fork(myLog, (r.choices?.log ?? []) as Log)}</span></div></div>`).join('')}</div></div>` : '';
 
   const top = rows[0];
   return `<div class="page">${header('우리 기수')}<main class="pad tight" style="padding-top:8px;padding-bottom:150px">
@@ -153,7 +154,7 @@ const ago = (t: string) => {
   return m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`;
 };
 const gbItem = (g: GuestRow, actions = true, admin = false) => `<div class="gb ${g.hidden ? 'gbhid' : ''}">
-    <div class="gh"><b>${esc(g.nickname)}</b><span>${ago(g.created_at)}${admin && g.hidden ? ' · <b class="red">가려짐</b>' : admin && g.reports ? ` · 신고 ${g.reports}` : ''}</span>${actions && !admin && g.user_id !== myId() ? `<button class="gr" data-act="gb-report" data-v="${g.id}">신고</button>` : ''}</div>
+    <div class="gh"><b>${esc(cleanNick(g.nickname))}</b><span>${ago(g.created_at)}${admin && g.hidden ? ' · <b class="red">가려짐</b>' : admin && g.reports ? ` · 신고 ${g.reports}` : ''}</span>${actions && !admin && g.user_id !== myId() ? `<button class="gr" data-act="gb-report" data-v="${g.id}">신고</button>` : ''}</div>
     <p>${esc(g.body)}</p>
     ${admin && gs.replyId === g.id ? `<div class="rep"><b>개발자 답글</b>
       <textarea id="gbreply" class="inp" style="background:#fff;height:76px;margin-top:6px;padding:10px 12px;resize:none" maxlength="300" placeholder="답글 (비우고 저장하면 지워져요)">${esc(gs.replyText)}</textarea>
@@ -203,7 +204,7 @@ export function guestPreview(): string {
   const st = load('gb:pre', () => guestbook(1));
   const g = st.state === 'ok' ? st.data[0] : null;
   if (unseenReplies().length) return `<a class="gbstrip" href="#/guestbook"><span class="nb">한마디</span><span class="tx"><b>내 한마디에 답글이 달렸어요</b></span><span class="go">보기 ›</span><i class="dot"></i></a>`;
-  return `<a class="gbstrip" href="#/guestbook"><span class="nb">한마디</span><span class="tx">${g ? `<b>${esc(g.nickname)}</b> · ${esc(g.body)}` : '개발자한테 버그·건의·응원을 남겨 주세요'}</span><span class="go">쓰기 ›</span></a>`;
+  return `<a class="gbstrip" href="#/guestbook"><span class="nb">한마디</span><span class="tx">${g ? `<b>${esc(cleanNick(g.nickname))}</b> · ${esc(g.body)}` : '개발자한테 버그·건의·응원을 남겨 주세요'}</span><span class="go">쓰기 ›</span></a>`;
 }
 
 export const rankName = (i: number) => RANKS[i];
