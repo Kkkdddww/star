@@ -363,7 +363,7 @@ function viewLobby(): string {
       <button class="iconbtn" data-act="route-rank" aria-label="랭킹">${icon('trophy', 20)}</button>
       <a class="iconbtn" href="#/settings" aria-label="설정">${icon('gear', 20)}</a></header>
     ${guestPreview()}
-    <main class="stack" style="padding-bottom:${primary ? 120 : 32}px">
+    <main class="stack" style="padding-bottom:calc(${primary ? 120 : 32}px + env(safe-area-inset-bottom))">
       ${meCard(best)}
       ${loginRow()}
       <div class="tiles">
