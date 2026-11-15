@@ -59,18 +59,18 @@ cards.card_result = page(`${head('일 일 명 령')}
   <p class="h">${md(day)} 오늘의 기수<br><span class="o">${num(d.participants)}명</span> 중 별은 ${num(d.generals)}명</p>
   <div class="stats"><div><span>장군 비율</span><b>${d.generalPct}%</b></div><div><span>중장 이상</span><b>${num(d.threeStarPlus)}명</b></div><div><span>대장</span><b>${num(d.fourStar)}명</b></div></div>
   <div style="margin-top:34px">${d.top.map((r: { place: number; name: string; rank: Rank; billet: string; years: number; honor: number }) => `<div class="row"><span class="pl">${r.place}</span><span class="ins">${insignia(r.rank, 56, false)}</span><span class="g"><b>${esc(r.name)}</b><span>${r.rank} · ${esc(r.billet ?? '')} · ${r.years}년</span></span><span class="v">명예 ${r.honor}</span></div>`).join('')}</div>
-  ${foot(`내일은 <b>${facts.tomorrow.difficulty ?? '새 기수'}</b>${facts.tomorrow.difficulty ? ' 난이도' : ''}<br>malttuk.com`)}`);
+  ${foot(`${md(facts.tomorrow.day)}은 <b>${facts.tomorrow.difficulty ?? '새 기수'}</b>${facts.tomorrow.difficulty ? ' 난이도' : ''}<br>malttuk.com`)}`);
 // 2. 결재 투표 (답은 내일)
 const c = facts.mostSplitChoice;
 if (c) cards.card_poll = page(`${head('결 재 대 기')}
   <p class="h">당신이라면<br><span class="o">${esc(c.title)}</span></p>
-  <p class="sub">오늘 ${num(c.total)}명이 이 결재를 받았어요. ${c.split >= 40 ? '의견이 거의 반반으로 갈렸어요' : '의견이 갈렸어요'}</p>
-  <div style="margin-top:20px">${c.options.map((o: { label: string }, i: number) => `<div class="opt"><i>${'ABCD'[i]}</i>${esc(o.label)}</div>`).join('')}</div>
-  ${foot('댓글로 골라 주세요<br><b>실제 결과는 내일 공개</b>', '<div class="stamp olive"><b>결재</b><i>대기</i></div>')}`);
+  <p class="sub">${md(day)} ${num(c.total)}명이 이 결재를 받았어요</p>
+  <div style="margin-top:20px">${[...c.options].sort((a: { key: string }, b: { key: string }) => a.key.localeCompare(b.key)).map((o: { label: string }, i: number) => `<div class="opt"><i>${'ABCD'[i]}</i>${esc(o.label)}</div>`).join('')}</div>
+  ${foot(`댓글로 골라 주세요<br><b>실제 결과는 ${md(new Date(Date.parse(day) + 86400e3).toISOString().slice(0, 10))} 공개</b>`, '<div class="stamp olive"><b>결재</b><i>대기</i></div>')}`);
 // 3. 어제 투표 결과 공개
 const pc = prev?.mostSplitChoice;
 if (pc) cards.card_reveal = page(`${head('결 재 결 과')}
-  <p class="h">어제 투표<br><span class="o">${esc(pc.title)}</span></p>
+  <p class="h">${md(prevDay)} 투표<br><span class="o">${esc(pc.title)}</span></p>
   <p class="sub">${md(prevDay)} 오늘의 기수에서 이 결재를 받은 ${num(pc.total)}명의 실제 선택이에요</p>
   ${pc.options.map((o: { label: string; pct: number }) => `<div class="res"><p class="t">${esc(o.label)}<span>${o.pct}%</span></p><div class="bar"><div style="width:${o.pct}%"></div></div></div>`).join('')}
   ${foot('당신의 선택은 몇 %였나요?<br>malttuk.com', '<div class="stamp olive"><b>결재</b><i>완료</i></div>')}`);
