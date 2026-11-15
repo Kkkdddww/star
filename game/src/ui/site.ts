@@ -104,7 +104,7 @@ function viewNotice(): string {
 
 function viewAbout(): string {
   return wrap('게임 소개', sec('말뚝은 어떤 게임인가요', `
-    <p><b>2년 말고 30년.</b> 소위로 임관해서 별까지, 장교 인생을 한 번에 1년씩 보내는 커리어 시뮬레이션이에요.</p>
+    <p><b>임관부터 전역까지.</b> 소위로 임관해서 별까지, 장교 인생을 한 번에 1년씩 보내는 커리어 시뮬레이션이에요.</p>
     <p>출신과 능력치가 다른 후보 세 명 중 한 명을 골라 학교에 들어가고, 동기 30명과 함께 결재하고, 평정을 받고, 진급 심사를 기다려요. 한 판은 10분 정도예요.</p>`) +
     sec('만들면서 지킨 원칙', `<ul>
       <li>실제 부대명, 위치, 무기, 작전·경계 절차는 넣지 않았어요.</li>
@@ -196,7 +196,7 @@ export function footer(): string {
   const L = (h: string, t: string) => `<a href="#/${h}">${t}</a>`;
   return `<footer class="sitefoot">
     <div class="ftop">
-      <div><p class="fn">말뚝</p><p class="ft">2년 말고 30년, 장교 커리어 시뮬레이션</p></div>
+      <div><p class="fn">말뚝</p><p class="ft">임관부터 전역까지, 내 장교 인생 시뮬레이션</p></div>
       <a class="fver" href="#/notice">v${NOTICES[0].id}</a>
     </div>
     <div class="fcols">
