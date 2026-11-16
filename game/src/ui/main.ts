@@ -14,7 +14,7 @@ import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, 
 import { asg, assignmentsFor, isRequired, lacksRequired, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
 import { RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
-import { careerScore, meritLine, promotionBreakdown, weakestStats } from '../engine/promotion';
+import { careerLine, careerScore, meritLine, promotionBreakdown, weakestStats } from '../engine/promotion';
 import { graduate, rollOrigin, SCHOOL_MOMENTS, type Graduation } from '../engine/school';
 import { eul, eunNeun, hasJong, iga, ro } from '../engine/text';
 import { STAT_KEYS, STAT_LABEL, type Branch, type DeskResult, type Outcome, type GameState, type Origin, type Path, type Policy, type Potential, type Rank, type SchoolFocus, type StatKey, type Stats, type YearReport } from '../engine/types';
@@ -29,7 +29,7 @@ import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk,
 import { loginState } from './login';
 import { forgetPeople, contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
 import { randomRibbon, teamRibbon } from './teamRibbon';
-import { AlreadyError, hideGuest, replyGuest, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
+import { AlreadyError, kickMember, hideGuest, replyGuest, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
 
 // ───────── 저장 ─────────
 interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number }
@@ -680,7 +680,7 @@ function viewRecord(g: GameState): string {
     <div class="hd"><span>지금 심사를 받는다면</span><em>${RANKS[rankCount(me.rank) + 1]} 진급</em></div>
     <div class="bd">
       ${REQUIRED_BILLET[me.rank] ? `<div class="kv" style="margin-bottom:14px"><span>필수 보직</span><b>${REQUIRED_BILLET[me.rank]!.label} ${lacksRequired(me) ? '<span class="chip red">아직 안 함</span>' : '<span class="chip on">완료</span>'}</b></div>` : ''}
-      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, `55 + 핵심 ${me.rankLog.core ? 25 : 0} + 보조 ${Math.min(2, me.rankLog.support.length) * 10}${me.origin === '육사' ? ' + 출신 3' : ''}`], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
+      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, careerLine(me)], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
         .filter((x) => x[1] > 0).map(([l, w, v, d]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(w * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track light"><div style="width:${v}%"></div></div><p class="faint" style="margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</p></div>`).join('')}
     </div>
   </section>` : ''}
@@ -1653,6 +1653,11 @@ root.addEventListener('click', (e) => {
         await joinTeam(pick.id); invalidate('contest'); unstash(''); await ensureMainTeam(pick.id);
         track('team_random'); toast(`'${pick.name}' 기수에 들어갔어요`); location.hash = `#/c/${pick.code}`;
       }).catch((e) => toast(e instanceof Error ? e.message : '들어가지 못했어요'));
+      break;
+    }
+    case 'team-kick': {
+      if (!confirm('이 동기를 기수에서 내보낼까요? 이번 주 기록도 기수 점수에서 빠져요.')) break;
+      void kickMember(el.dataset.c ?? '', v).then(() => { invalidate('contest'); unstash(''); toast('내보냈어요'); render(); }).catch((e) => toast(e instanceof Error ? e.message : '내보내지 못했어요'));
       break;
     }
     case 'team-leave': {

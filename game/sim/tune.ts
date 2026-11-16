@@ -18,7 +18,7 @@ for (let j = 0; j < N; j++) {
   let x = (i * 2654435761 + 97) >>> 0; const R = () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296);
   const smart = () => BOT === 'best' || (BOT === 'mid' && R() < 0.5);
   const pot: Potential = POT === 'mix' ? POT_ROLL(R()) : (POT as Potential);
-  let s = newGame({ name: '봇', origin: '학군', branch: BR[i % 3], path: PA[Math.floor(i / 3) % 3], potential: pot, seed: 5000 + i, schoolPct: 20 + Math.floor(R() * 60), bonus: {} });
+  let s = newGame({ name: '봇', origin: '학군', branch: (process.env.BRANCH as Branch) || BR[i % 3], path: PA[Math.floor(i / 3) % 3], potential: pot, seed: 5000 + i, schoolPct: 20 + Math.floor(R() * 60), bonus: {} });
   let g = 0;
   while (!s.ended && g++ < 60) {
     if (s.personnelDue) { const me = s.me; const pri = (a: any) => (lacksRequired(me) && isRequired(me, a.id) ? 3 : a.kind === '지휘' || a.kind === '요직' ? 1 : 0); const sm = smart();

@@ -1,6 +1,6 @@
 // v3.3 인사기록카드 (#/p/아이디, #/p/me): 랭킹 · 기수 명부 어디서든 사람을 누르면 열린다
 import { RANKS } from '../data/config';
-import { cleanNick } from '../data/banned';
+import { cleanNick, hasBanned } from '../data/banned';
 import { hobongOf, serialLabel } from '../engine/hobong';
 import type { Rank } from '../engine/types';
 import { dailyBest, myId, profileOf, ribbonsOf, runsOf, sameNickCount, statsOf, teamHonors, teamsOf, type RunRow } from '../net/api';
@@ -76,9 +76,11 @@ export function viewPerson(idArg: string): string {
   let mine = '';
   if (own) {
     const dup = load(`person:dup:${p.nickname}`, () => sameNickCount(p.nickname).catch(() => 1));
-    const wait = p.nick_changed_at ? Math.ceil((new Date(p.nick_changed_at).getTime() + 7 * 86400000 - Date.now()) / 86400000) : 0;
+    // v3.3.9 금칙어가 섞인 이름은 7일 기다리지 않고 바로 바꾸게 (서버 SQL 2026-11-16_v3.3.9.sql과 같은 규칙)
+    const banned = hasBanned(p.nickname);
+    const wait = !banned && p.nick_changed_at ? Math.ceil((new Date(p.nick_changed_at).getTime() + 7 * 86400000 - Date.now()) / 86400000) : 0;
     mine = `<p class="secx"><span>닉네임</span></p><section class="doc" style="margin-top:0"><div class="bd">
-      ${dup.state === 'ok' && dup.data > 1 ? `<p class="sub" style="margin-bottom:10px">'${esc(cleanNick(p.nickname))}'은 다른 사람도 쓰는 이름이에요. 겹치지 않는 이름으로 바꿔 볼까요?</p>` : ''}
+      ${banned ? '<p class="sub" style="margin-bottom:10px;color:var(--red)">지금 닉네임에 쓸 수 없는 단어가 있어요. 바로 바꿀 수 있어요</p>' : dup.state === 'ok' && dup.data > 1 ? `<p class="sub" style="margin-bottom:10px">'${esc(cleanNick(p.nickname))}'은 다른 사람도 쓰는 이름이에요. 겹치지 않는 이름으로 바꿔 볼까요?</p>` : ''}
       <div style="display:flex;gap:8px"><input id="nick" class="inp" style="height:46px;background:var(--bg)" maxlength="12" placeholder="새 닉네임" value="${esc(rk.nick)}" ${wait > 0 ? 'disabled' : ''}><button class="btn" style="width:92px;height:46px" data-act="save-nick" ${wait > 0 ? 'disabled' : ''}>바꾸기</button></div>
       <p class="faint" style="margin-top:6px">${rk.nickMsg ? esc(rk.nickMsg) : wait > 0 ? `${wait}일 뒤에 바꿀 수 있어요` : '7일에 한 번 바꿀 수 있어요 · 예전 기록도 새 이름으로 보여요'}</p>
     </div></section>`;

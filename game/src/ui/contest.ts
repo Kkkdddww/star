@@ -244,7 +244,8 @@ export function viewTeam(c: CohortRow): string {
 
   const roster = mem.state === 'loading' ? loadingBox : `<p class="secx"><span>기수 명부</span><span>${members.length}명</span></p><section class="doc" style="margin-top:0"><div class="bd" style="padding:4px 16px">${members.map((m) => {
     const founding = new Date(m.joined_at).getTime() - created.getTime() < 86400000;
-    return `<a class="trow2 ${m.user_id === me ? 'me' : ''}" href="#/p/${m.user_id}"><span class="tn">${m.seq}</span><span class="g"><b>${esc(nm(m.user_id))}${m.user_id === c.created_by ? ' <span class="chip">기수장</span>' : ''}${m.user_id === me ? ' <span class="chip on">나</span>' : ''}</b><span>${founding ? '창설 동기 · ' : ''}${md(m.joined_at.slice(0, 10))} 입대</span></span></a>`;
+    const kick = isCaptain && m.user_id !== me ? `<button class="kick" data-act="team-kick" data-v="${m.user_id}" data-c="${c.id}" aria-label="내보내기">내보내기</button>` : '';
+    return `<div class="trow2wrap"><a class="trow2 ${m.user_id === me ? 'me' : ''}" href="#/p/${m.user_id}"><span class="tn">${m.seq}</span><span class="g"><b>${esc(nm(m.user_id))}${m.user_id === c.created_by ? ' <span class="chip">기수장</span>' : ''}${m.user_id === me ? ' <span class="chip on">나</span>' : ''}</b><span>${founding ? '창설 동기 · ' : ''}${md(m.joined_at.slice(0, 10))} 입대</span></span></a>${kick}</div>`;
   }).join('')}</div></section>`;
 
   const hrows = hist.state === 'ok' ? hist.data : [];
