@@ -88,6 +88,9 @@ interface Cand { o: Officer | null; wishes: [string, string]; score: number }
 export const npcWishesFor = (o: Officer, seed: number, year: number) => npcWishes(o, keyRng(seed, year, o.id, 'wish'));
 const cardOf = (seed: number, year: number, id: string, rank: Rank) => (isGeneral(rank) || termOff() ? undefined : unitCard(seed, year, id));
 
+/** v3.4.1 지휘관 선발 심사를 보여 주는 계급 */
+const CMD_RANKS: Rank[] = ['중령', '대령', '소장'];
+
 export function runPersonnel(everyone: Officer[], myWishes: [string, string] | null, year: number, rng: Rng, seed = 0): PersonnelResult | null {
   let mine: PersonnelResult | null = null;
   const due = everyone.filter(needsReassign);
@@ -152,6 +155,11 @@ export function runPersonnel(everyone: Officer[], myWishes: [string, string] | n
       }
       place(c.o, got, year, rng, seed);
       if (c.o.id === 'me' && mine) Object.assign(mine, { unit: c.o.term?.unit, boss: c.o.term?.boss });
+      if (c.o.id === 'me' && mine && CMD_RANKS.includes(rank) && asg(c.wishes[0]).kind === '지휘') {
+        const w = asg(c.wishes[0]);
+        const rivals = cands.filter((x) => x.wishes[0] === w.id);
+        mine.cmd = { name: w.name, applicants: rivals.length, quota: quotaOf(w, total, cardOf(seed, year, w.id, rank)), place: rivals.indexOf(c) + 1, selected: got === w.id };
+      }
     }
   }
   return mine;

@@ -138,6 +138,7 @@ export function honorScore(g: GameState): { total: number; parts: { label: strin
     { label: '무사고 지휘', v: me.log.cleanCommandBest * 2 },
     { label: '원칙을 지킨 중대 사건', v: me.log.principled * 4 },
     ...(me.service?.해외파병 ? [{ label: '해외 파병', v: 10 }] : []),
+    ...(me.log.servedOut ? [{ label: '정년까지 근무', v: 5 }] : []),
     { label: '마음에 걸리는 일', v: -me.hidden.risk * 5 },
   ];
   return { total: Math.max(0, parts.reduce((s, x) => s + x.v, 0)), parts: parts.filter((x) => x.v) };

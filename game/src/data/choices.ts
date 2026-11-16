@@ -1125,6 +1125,22 @@ export const CHOICES: ChoiceDef[] = [
     ],
   },
 
+  // ───────── v3.4.1 진급 심사 직전 (경합일 때 7월 결재를 대신) ─────────
+  {
+    id: 'last_push', type: '자기', title: '심사 직전, 마지막 승부', when: {}, chainOnly: true,
+    body: '올해 말 진급 심사에서 선발선과 거의 붙어 있어요. 남은 반년을 어떻게 쓸까요?',
+    options: [
+      { key: 'a', label: '큰 과제를 자원해 맡기', style: '도전', desc: '성공하면 표창, 실패하면 평정이 깎여요', stat: 'command', base: 45, tags: ['지휘', '기획'],
+        success: { text: '과제를 해내 표창을 받았어요. 심사 서류가 두꺼워졌어요', eval: 5, award: '표창' },
+        fail: { text: '과제가 틀어져 평정이 깎였어요', eval: -4 } },
+      { key: 'b', label: '맡은 일을 흠 없이 마무리', style: '원칙', desc: '크게 오르진 않아도 확실해요', stat: 'admin', base: 0, sure: true,
+        success: { text: '흠 없이 마무리해 평정이 조금 올랐어요', eval: 2 }, fail: { text: '', eval: 0 } },
+      { key: 'c', label: '상관에게 추천서를 부탁', style: '소통', desc: '관계가 좋으면 통해요', stat: 'social', base: 50, tags: ['소통'],
+        success: { text: '상관이 직접 추천서를 써 줬어요', eval: 4, stats: { social: 1 } },
+        fail: { text: '부탁이 부담스러웠는지 반응이 미지근했어요', eval: -1 } },
+    ],
+  },
+
   // ───────── 연쇄 이벤트 (2년 뒤) ─────────
   {
     id: 'rules_spread', type: '부대', title: '자율 규칙이 확대돼요', when: {}, chainOnly: true,

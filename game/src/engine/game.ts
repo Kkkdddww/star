@@ -7,7 +7,7 @@ import { overall } from './growth';
 import { createCohort, createOfficer, npcFocus, stepOfficer } from './officer';
 import { asg, assignmentsFor, isGeneral, needsReassign, openFor, runPersonnel, utypeOf } from './personnel';
 import { rollBoss, startTerm, UNIT_KEYS, unitCard } from './term';
-import { runReview, weakest } from './promotion';
+import { runReview, weakest, forecast } from './promotion';
 import { createRng, type Rng } from './rng';
 import { ro } from './text';
 import { bossComment, gradeOf } from './yearEvents';
@@ -51,9 +51,12 @@ export const careerYear = (s: GameState) => s.history.length + 1;
 export const rivalOf = (s: GameState) => s.cohort.find((o) => o.id === s.rivalId)!;
 
 export function prepareDesk(s: GameState): GameState {
-  if (s.ended || s.personnelDue || s.policyDue) return { ...s, desk: null };
+  if (s.ended || s.personnelDue || s.policyDue || s.me.capped === 'ask') return { ...s, desk: null };
   const rng = createRng(s.seed * 977 + s.year * 13);
   const items = buildDesk(s.me, s.year, s.majorYears.includes(careerYear(s)), rng);
+  // v3.4.1 올해 심사가 경합이면 7월 결재를 '마지막 승부'로
+  const f = upcoming(s).promotion ? forecast(s.me, s.cohort) : null;
+  if (f && f.gap >= -3 && f.gap <= 1 && s.me.eventLog['last_push'] !== s.year) items[1] = { defId: 'last_push', slot: 1, v: 0 };
   return { ...s, desk: { items, results: items.map(() => null) } };
 }
 
@@ -82,6 +85,7 @@ function promote(o: Officer) {
 export function advanceYear(state: GameState, focus: [StatKey, StatKey]): { next: GameState; report: YearReport } {
   if (state.ended) throw new Error('이미 끝난 커리어예요');
   let s = state;
+  if (s.me.capped === 'ask') s = capChoice(s, true);
   // 결재를 안 했으면 첫 선택지(보통 원칙)로 처리 — 봇·안전장치용
   if (s.desk) s.desk.results.forEach((r, i) => { if (!r) s = decide(s, i, CHOICE_BY_ID[s.desk!.items[i].defId].options[0].key); });
   const myDesk = (s.desk?.results ?? []).filter(Boolean) as DeskResult[];
@@ -125,6 +129,11 @@ export function advanceYear(state: GameState, focus: [StatKey, StatKey]): { next
     if (!o.active) continue;
     o.age += 1; o.yearsInRank += 1; o.yearsInAssignment += 1;
   }
+  // v3.4.1 정년까지 근무: 남은 해를 채우면 전역
+  if (me.active && typeof me.capped === 'number') {
+    me.capped -= 1;
+    if (me.capped <= 0) { me.active = false; me.log.servedOut = true; me.exitReason = `${me.rank} 정년까지 근무하고 전역`; }
+  }
   for (const o of everyone) {
     if (o.active && AUTO_PROMOTE.includes(o.rank) && o.yearsInRank >= MIN_YEARS[o.rank]!) {
       promote(o);
@@ -140,9 +149,9 @@ export function advanceYear(state: GameState, focus: [StatKey, StatKey]): { next
     for (const o of r.excluded) {
       o.reviewFails += 1;
       const out = o.reviewFails >= tries;
-      if (out) { o.active = false; o.exitReason = `${rank} 계급정년 전역`; }
+      if (out) { if (o === me) me.capped = 'ask'; else { o.active = false; o.exitReason = `${rank} 계급정년 전역`; } }
       if (o === me) {
-        events.push({ id: 'promotion', kind: 'milestone', title: `${r.to} 진급 심사 제외`, detail: `필수 보직(${REQUIRED_BILLET[rank]!.label})을 거치지 않아 심사를 받지 못했어요${out ? ' · 계급정년' : ` · 남은 기회 ${tries - o.reviewFails}번`}`, tag: '제외', evalEffect: 0, tone: 'bad', ends: out });
+        events.push({ id: 'promotion', kind: 'milestone', title: `${r.to} 진급 심사 제외`, detail: `필수 보직(${REQUIRED_BILLET[rank]!.label})을 거치지 않아 심사를 받지 못했어요${out ? ' · 계급정년' : ` · 남은 기회 ${tries - o.reviewFails}번`}`, tag: '제외', evalEffect: 0, tone: 'bad' });
         notes.push(`${REQUIRED_BILLET[rank]!.label} 보직을 거쳐야 ${r.to} 심사를 받을 수 있어요. 다음 인사에서 꼭 지원하세요`);
       } else if (o.id === rivalId || out) news.push({ text: `${tagName(o)} · ${out ? `${rank} 계급정년 전역` : `${r.to} 심사 제외`}`, weight: o.id === rivalId ? 6 : 2 });
     }
@@ -158,7 +167,7 @@ export function advanceYear(state: GameState, focus: [StatKey, StatKey]): { next
       };
       report.promotion = result;
       const lastTry = !selected && attempt >= tries;
-      events.push({ id: 'promotion', kind: 'milestone', title: `${r.to} 진급 심사 (${attempt}차)`, detail: selected ? `대상 ${r.scored.length + r.others}명 중 ${r.selectedIds.size + r.othersSelected}명 선발` : lastTry ? `${attempt}차 낙천, 계급정년` : `낙천 · 내년에 ${attempt + 1}차 도전`, tag: selected ? '선발' : '낙천', evalEffect: 0, tone: selected ? 'good' : 'bad', ends: lastTry });
+      events.push({ id: 'promotion', kind: 'milestone', title: `${r.to} 진급 심사 (${attempt}차)`, detail: selected ? `대상 ${r.scored.length + r.others}명 중 ${r.selectedIds.size + r.othersSelected}명 선발` : lastTry ? `${attempt}차 낙천, 계급정년` : `낙천 · 내년에 ${attempt + 1}차 도전`, tag: selected ? '선발' : '낙천', evalEffect: 0, tone: selected ? 'good' : 'bad' });
       if (selected) {
         if (attempt === 3) me.log.thirdTry = true;
         if (!already) { me.log.firstInCohort.push(r.to); records.push(`동기 중 처음으로 ${r.to} 진급`); }
@@ -172,7 +181,9 @@ export function advanceYear(state: GameState, focus: [StatKey, StatKey]): { next
         else news.push({ text: `${tagName(o)} · ${ro(r.to)} 진급`, weight: 3 + (o.id === rivalId ? 5 : 0) });
       } else {
         o.reviewFails += 1;
-        if (o.reviewFails >= tries) {
+        if (o.reviewFails >= tries && o === me) {
+          me.capped = 'ask';
+        } else if (o.reviewFails >= tries) {
           o.active = false;
           o.exitReason = `${rank} 계급정년 전역`;
           if (o !== me) news.push({ text: `${tagName(o)} · ${rank} 계급정년 전역`, weight: 2 + (o.id === rivalId ? 5 : 0) });
@@ -231,10 +242,18 @@ export function setPolicy(s: GameState, p: Policy): GameState {
   return prepareDesk({ ...s, me: { ...s.me, policy: p }, policyDue: false });
 }
 
-export function retire(s: GameState): GameState {
+export function retire(s: GameState, reason = '자진 전역'): GameState {
   if (s.ended) return s;
-  const me = { ...s.me, active: false, exitReason: '자진 전역' };
-  return { ...s, me, desk: null, personnelDue: false, policyDue: false, ended: { year: s.year, reason: '자진 전역', finalRank: me.rank } };
+  const me = { ...s.me, active: false, exitReason: reason };
+  return { ...s, me, desk: null, personnelDue: false, policyDue: false, ended: { year: s.year, reason, finalRank: me.rank } };
+}
+
+/** v3.4.1 낙천 갈림길: 마지막 심사에서 떨어진 뒤 정년까지 근무(2년 더) 또는 명예 전역 */
+export const SERVE_OUT_YEARS = 2;
+export function capChoice(s: GameState, stay: boolean): GameState {
+  if (s.me.capped !== 'ask') return s;
+  if (!stay) return retire({ ...s, me: { ...s.me, capped: undefined } }, `${s.me.rank} 명예 전역`);
+  return prepareDesk({ ...s, me: { ...s.me, capped: SERVE_OUT_YEARS } });
 }
 
 /** 올해 예정된 일 */
@@ -242,7 +261,7 @@ export function upcoming(s: GameState): { promotion?: { to: Rank; attempt: numbe
   const me = s.me;
   const out: ReturnType<typeof upcoming> = {};
   const p = PROMOTION[me.rank];
-  if (p && me.yearsInRank + 1 >= MIN_YEARS[me.rank]!) out.promotion = { to: RANKS[RANKS.indexOf(me.rank) + 1], attempt: me.reviewFails + 1, tries: p.tries };
+  if (p && !me.capped && me.yearsInRank + 1 >= MIN_YEARS[me.rank]!) out.promotion = { to: RANKS[RANKS.indexOf(me.rank) + 1], attempt: me.reviewFails + 1, tries: p.tries };
   if (me.longService === 'pending' && me.rank === '중위' && me.yearsInRank === 1) out.longService = 1;
   if (me.longService === 'retry') out.longService = 2;
   if (me.yearsInRank === 0) out.education = me.rank === '대위' ? '고등군사반' : me.rank === '소령' ? '합동군사대학' : me.rank === '대령' ? '안보과정' : undefined;

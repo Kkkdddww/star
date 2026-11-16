@@ -5,7 +5,7 @@ import { CHOICE_BY_ID } from '../data/choices';
 import { ORIGIN, ORIGIN_SCHOOL, PERSONALITY, POLICY, POTENTIAL, PROMOTION, RANKS, SCHOOL_FOCUS } from '../data/config';
 import { WORK_TITLE } from '../data/events';
 import { deskText, optionOdds, pityBonus, rewardTier, scaledOutcome } from '../engine/choice';
-import { advanceYear, careerYear, decide, newGame, retire, rivalOf, setPolicy, submitWishes, upcoming } from '../engine/game';
+import { advanceYear, careerYear, decide, newGame, retire, capChoice, SERVE_OUT_YEARS, rivalOf, setPolicy, submitWishes, upcoming } from '../engine/game';
 import { branchFits, overall } from '../engine/growth';
 import { earnedRibbons, earnedTitles, honorScore, RIBBONS, TITLES, titleName, type Earned } from '../engine/meta';
 import { initAnalytics, track } from '../net/analytics';
@@ -15,7 +15,7 @@ import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, 
 import { asg, assignmentsFor, isRequired, lacksRequired, openFor, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
 import { RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
-import { careerLine, careerScore, meritLine, promotionBreakdown, weakestStats } from '../engine/promotion';
+import { careerLine, careerScore, meritLine, promotionBreakdown, weakestStats, forecast, RECOMMEND } from '../engine/promotion';
 import { graduate, rollOrigin, SCHOOL_MOMENTS, type Graduation } from '../engine/school';
 import { eul, eunNeun, hasJong, iga, ro } from '../engine/text';
 import { STAT_KEYS, STAT_LABEL, type Branch, type DeskResult, type Outcome, type GameState, type Origin, type Path, type Policy, type Potential, type Rank, type SchoolFocus, type StatKey, type Stats, type YearReport } from '../engine/types';
@@ -95,7 +95,7 @@ const persistMeta = () => write(META_KEY, meta);
 type Screen = 'medal' | 'lobby' | 'p-intro' | 'p-cands' | 'p-envelope' | 'p-focus' | 'p-school' | 'p-grad' | 'p-commission'
   | 'home' | 'desk' | 'progress' | 'result' | 'promotion' | 'promo-ceremony' | 'wish' | 'order' | 'policy' | 'assign-ceremony' | 'ending';
 type Tab = 'home' | 'record' | 'cohort' | 'dex';
-type Sheet = null | 'focus' | 'retire' | 'reset' | 'ad' | 'title' | 'post';
+type Sheet = null | 'focus' | 'retire' | 'reset' | 'ad' | 'title' | 'post' | 'race';
 
 interface Prologue {
   name: string; origin: Origin; potential: Potential; seed: number;
@@ -570,8 +570,41 @@ function turningPoint(g: GameState): TurningPoint | null {
   return tp;
 }
 
+/** v3.4.1 낙천 갈림길: 마지막 심사에서 떨어진 뒤 */
+function viewCap(g: GameState): string {
+  const me = g.me;
+  const p = g.history[g.history.length - 1]?.promotion;
+  return `
+  <section class="doc">
+    <div class="hd"><span>${me.rank} 계급정년 통지</span><em>${g.year}년</em></div>
+    <div class="bd">
+      <p class="body" style="margin:0 0 10px">${p ? `${p.to} 진급 ${p.attempt}차 심사까지 마쳤어요. 더 이상 진급 기회는 없어요.` : '진급 심사 기회를 모두 썼어요.'} 남은 길은 두 가지예요.</p>
+      <button class="opt" data-act="cap-stay"><div class="top2"><span class="chip">계속 근무</span><b>정년까지 근무</b></div><p class="d">${me.rank}로 ${SERVE_OUT_YEARS}년 더 일하고 전역해요. 결재·표창·약장은 계속 쌓여요 · 명예 점수 +5</p></button>
+      <button class="opt" data-act="cap-leave"><div class="top2"><span class="chip gray">전역</span><b>명예 전역</b></div><p class="d">지금 ${me.rank}로 군 생활을 마무리해요</p></button>
+    </div>
+  </section>`;
+}
+
+/** v3.4.1 진급 경쟁 현황 (시트) */
+function raceSheet(g: GameState): string {
+  const f = forecast(g.me, g.cohort);
+  if (!f) return `<h3 class="h2">진급 경쟁 현황</h3><p class="sub">올해는 진급 심사가 없어요.</p><button class="btn" data-act="close-sheet">닫기</button>`;
+  const b = promotionBreakdown(g.me);
+  return `<h3 class="h2">${f.to} 진급 경쟁 현황</h3><p class="sub">지금 기록으로 올해 말 심사를 미리 계산했어요. 운(±3점)은 빠져 있어요.</p>
+    <div class="kvs">
+      <div class="kv"><span>심사 대상 (예상)</span><b>${f.candidates}명 · 선발 약 ${f.slots}명</b></div>
+      <div class="kv"><span>내 예상 점수</span><b>${f.score.toFixed(1)}점 · ${f.place}위</b></div>
+      <div class="kv"><span>예상 선발선</span><b>${f.cut.toFixed(1)}점</b></div>
+      <div class="kv"><span>선발선과 차이</span><b class="${f.gap >= 0 ? 'olive' : 'red'}">${f.gap >= 0 ? '+' : ''}${f.gap.toFixed(1)}점 · ${f.verdict}</b></div>
+      <div class="kv"><span>지휘관 추천</span><b>${b.rec ? `<span class="olive">받음 +${RECOMMEND}점</span>` : '없음'}</b></div>
+    </div>
+    <div class="note">${b.rec ? '지금 상관이 추천서를 써 줄 거예요. 임기 중 나쁜 일이 생기면 추천이 사라져요.' : `지금 임기에서 평정 우수 이상을 한 번 받고 나쁜 일이 없으면 상관 추천 +${RECOMMEND}점이에요.`}${f.verdict === '경합' ? '<br>경합이라 7월 결재에 마지막 승부 기회가 와요.' : ''}</div>
+    <button class="btn" data-act="close-sheet">닫기</button>`;
+}
+
 function viewHome(g: GameState): string {
   const me = g.me;
+  if (me.capped === 'ask') return `${serviceCard(g)}${viewCap(g)}`;
   const up = upcoming(g);
   const a = asg(me.assignmentId);
   const focus = save!.focus;
@@ -591,7 +624,12 @@ function viewHome(g: GameState): string {
   const tp = turningPoint(g);
   if (tp) todo.push(row('tp-open', 'target', '', tp.short, `추천 집중 육성 · ${STAT_LABEL[tp.rec[0]]}, ${STAT_LABEL[tp.rec[1]]}`, { dot: true, v: tp.key, r: tp.rec.join(',') }));
   if (lacksRequired(me)) todo.push(row('noop', 'alert', 'amber', `필수 보직 · ${REQUIRED_BILLET[me.rank]!.label}`, '거쳐야 다음 진급 심사를 받아요'));
-  if (up.promotion) todo.push(row('noop', 'up', 'amber', `${up.promotion.to} 진급 심사`, `올해 말 · ${up.promotion.attempt}차 · 기회 ${up.promotion.tries}번 중`));
+  if (up.promotion) {
+    const f = forecast(me, g.cohort);
+    todo.push(f ? row('open-race', 'up', f.verdict === '위험' ? 'red' : 'amber', `${up.promotion.to} 진급 심사 · ${f.verdict}`, `${up.promotion.attempt}차 · 예상 ${f.place}위 · 선발 ${f.slots}명 · ${f.gap >= 0 ? '+' : ''}${f.gap.toFixed(1)}점`)
+      : row('noop', 'up', 'amber', `${up.promotion.to} 진급 심사`, `올해 말 · ${up.promotion.attempt}차 · 기회 ${up.promotion.tries}번 중`));
+  }
+  if (typeof me.capped === 'number') todo.push(row('noop', 'shield', 'gray', '정년까지 근무', `${me.capped}년 남았어요`));
   if (up.longService) todo.push(row('noop', 'shield', 'amber', '장기복무 선발', up.longService === 2 ? '마지막 기회예요' : '지금까지의 평정 평균이 반영돼요'));
   if (up.education) todo.push(row('noop', 'book', 'gray', `${up.education} 입교`, '전문성이 석차를 좌우해요'));
   if (up.reassign) todo.push(row('noop', 'swap', 'gray', '정기 인사', '연말에 희망 조사가 있어요'));
@@ -753,6 +791,8 @@ function sheet(g: GameState | null): string {
       ${ui.tp ? `<button class="link" data-act="tp-dismiss" data-v="${ui.tp.key}">지금 육성 그대로 둘게요</button>` : ''}`;
   } else if (ui.sheet === 'post' && g) {
     body = postSheet(g);
+  } else if (ui.sheet === 'race' && g) {
+    body = raceSheet(g);
   } else if (ui.sheet === 'retire' && g) {
     body = `<h3 class="h2">전역 지원서를 낼까요?</h3><p class="sub">${g.me.rank} 계급으로 군 생활을 마무리해요. 되돌릴 수 없어요.</p>
       <div class="two"><button class="btn quiet" data-act="close-sheet">더 해볼게요</button><button class="btn" data-act="confirm-retire">전역하기</button></div>`;
@@ -975,7 +1015,7 @@ function viewPromotion(r: YearReport): string {
   <div class="page"><div class="pad tight">
     <div class="paper">
       <div class="phead"><div><p class="title">진급 심사 결과</p>
-      <p class="no">${r.year}년 ${p.to} 진급 · ${p.attempt}차 심사</p></div><div class="stamp pop ${p.selected ? 'olive' : ''}"><b style="font-size:22px">${p.selected ? '선발' : '낙천'}</b><i>${p.score.toFixed(1)}점</i></div></div>
+      <p class="no">${r.year}년 ${p.to} 진급 · ${p.attempt}차 심사</p></div><div class="stamp pop late ${p.selected ? 'olive' : ''}"><b style="font-size:22px">${p.selected ? '선발' : '낙천'}</b><i>${p.score.toFixed(1)}점</i></div></div>
       <div class="meta">
         <div class="kv"><span>심사 대상</span><b>${p.candidates}명${p.others ? ` (다른 기수 ${p.others}명 포함)` : ''}</b></div>
         <div class="kv"><span>선발</span><b>${p.selectedCount}명</b></div>
@@ -985,10 +1025,11 @@ function viewPromotion(r: YearReport): string {
       ${parts.map(([l, wt, v]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(wt * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track ${l === p.weakest.label && !p.selected ? 'light' : ''}"><div style="width:${v}%"></div></div></div>`).join('')}
       ${!p.selected ? `<div class="opinion">${p.cut !== null && p.cut - p.score <= 3 ? `<p><b>아깝게 떨어졌어요 · ${(Math.round((p.cut - p.score) * 10) / 10).toFixed(1)}점 차</b></p>` : ''}<p class="faint">더 올려볼 항목 · ${p.weakest.label}</p><p>${p.weakest.why}</p></div>` : ''}
     </div>
-    <p class="sec">함께 심사받은 동기</p>
-    ${peers.length ? peers.map((x) => `<div class="mate"><div class="g"><b>${esc(x.name)} ${x.rival ? '<span class="chip red">라이벌</span>' : ''}</b><span>${x.origin} · ${x.score.toFixed(1)}점</span></div><span class="chip ${x.selected ? '' : 'gray'}">${x.selected ? '선발' : '낙천'}</span></div>`).join('') : '<p class="sub">함께 심사받은 동기가 없어요.</p>'}
+    ${p.breakdown.rec ? `<p class="faint" style="margin-top:8px">지휘관 추천 +${p.breakdown.rec}점 포함</p>` : ''}
+    <p class="sec">진급 명단 · 함께 심사받은 동기</p>
+    ${peers.length ? peers.map((x, i) => `<div class="mate rise" style="animation-delay:${0.5 + i * 0.25}s"><div class="g"><b>${esc(x.name)} ${x.rival ? '<span class="chip red">라이벌</span>' : ''}</b><span>${x.origin} · ${x.score.toFixed(1)}점</span></div><span class="chip ${x.selected ? '' : 'gray'}">${x.selected ? '선발' : '낙천'}</span></div>`).join('') : '<p class="sub">함께 심사받은 동기가 없어요.</p>'}
   </div>
-  <div class="bar"><button class="btn" data-act="queue-next">${p.selected ? `${p.to} 계급장 달기` : lastTry ? '확인' : '내년에 다시 도전'}</button></div></div>`;
+  <div class="bar"><button class="btn" data-act="queue-next">${p.selected ? `${p.to} 계급장 달기` : lastTry ? '다음' : '내년에 다시 도전'}</button></div></div>`;
 }
 
 // ── 진급식 ──
@@ -1098,6 +1139,11 @@ function viewOrder(g: GameState): string {
       <p class="body">${p.note}.</p>
       <p class="faint" style="margin-top:8px">${p.quota === null ? '정원 제한 없음' : `정원 ${p.quota}명 · 1지망 지원 ${p.applicants}명`}</p>
     </div>
+    ${p.cmd ? `<div class="doc rise" style="margin:14px 0 0;animation-delay:.3s"><div class="hd"><span>지휘관 선발 심사</span><em class="${p.cmd.selected ? 'olive' : ''}">${p.cmd.selected ? '선발' : '미선발'}</em></div><div class="bd">
+      <div class="kv"><span>지원 자리</span><b>${p.cmd.name}</b></div>
+      <div class="kv"><span>지원</span><b>${p.cmd.applicants}명${p.cmd.quota === null ? '' : ` · 정원 ${p.cmd.quota}명`}</b></div>
+      <div class="kv"><span>내 순위</span><b>${p.cmd.place}위</b></div>
+    </div></div>` : ''}
     ${b && u ? `<div class="doc rise" style="margin:14px 0 0;animation-delay:.6s"><div class="hd"><span>새 부대 소식</span></div><div class="bd">${termRows(g)}</div></div>` : ''}
   </div>
   <div class="bar"><button class="btn" data-act="queue-next">확인</button></div></div>`;
@@ -1178,6 +1224,8 @@ function endingQuote(g: GameState, titleId: string | null): string {
   if (g.me.log.thirdTry) return '마지막 기회에서 살아남은 불사조';
   if (titleId && TITLE_QUOTE[titleId]) return TITLE_QUOTE[titleId];
   const r = g.ended!.reason;
+  if (r.includes('정년까지')) return '진급 대신 끝까지 자리를 지킨 사람';
+  if (r.includes('명예 전역')) return '물러날 때를 아는 사람';
   if (r.includes('계급정년')) return '마지막 날까지 자리를 지킨 사람';
   if (r.includes('자진')) return '스스로 다음 길을 고른 사람';
   if (r.includes('장기복무')) return '짧지만 굵었던 복무';
@@ -1774,6 +1822,9 @@ root.addEventListener('click', (e) => {
     case 'tp-dismiss': track('turning_point', { action: 'dismiss' }); (save!.tpSeen ??= []).push(v); save!.tpLast = save!.game.year; persist(); ui.sheet = null; ui.tp = null; render(); break;
     case 'open-post': ui.sheet = 'post'; render(); break;
     case 'open-retire': ui.sheet = 'retire'; render(); break;
+    case 'open-race': ui.sheet = 'race'; render(); break;
+    case 'cap-stay': save!.game = capChoice(g!, true); persist(); render(); break;
+    case 'cap-leave': save!.game = capChoice(g!, false); persist(); go('ending'); break;
     case 'confirm-retire': save!.game = retire(g!); persist(); ui.sheet = null; go('ending'); break;
     case 'open-reset': ui.sheet = 'reset'; render(); break;
     case 'new-game': if (isFixed(g)) { ui.sheet = null; ui.report = null; useSlot('free'); go('lobby'); break; }
