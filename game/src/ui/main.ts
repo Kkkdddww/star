@@ -14,7 +14,7 @@ import { CONTEST_FROM, CONTEST_POT, contestOpen, MAX_TEAMS, weekNo, weekOf } fro
 import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, type Candidate } from '../engine/candidates';
 import { asg, assignmentsFor, isRequired, lacksRequired, openFor, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
-import { RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
+import { MIN_YEARS, RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
 import { careerLine, careerScore, meritLine, promotionBreakdown, weakestStats, forecast, RECOMMEND } from '../engine/promotion';
 import { graduate, rollOrigin, SCHOOL_MOMENTS, type Graduation } from '../engine/school';
 import { eul, eunNeun, hasJong, iga, ro } from '../engine/text';
@@ -731,8 +731,8 @@ function viewRecord(g: GameState): string {
     <div class="hd"><span>지금 심사를 받는다면</span><em>${RANKS[rankCount(me.rank) + 1]} 진급</em></div>
     <div class="bd">
       ${REQUIRED_BILLET[me.rank] ? `<div class="kv" style="margin-bottom:14px"><span>필수 보직</span><b>${REQUIRED_BILLET[me.rank]!.label} ${lacksRequired(me) ? '<span class="chip red">아직 안 함</span>' : '<span class="chip on">완료</span>'}</b></div>` : ''}
-      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, careerLine(me)], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
-        .filter((x) => x[1] > 0).map(([l, w, v, d]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(w * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track light"><div style="width:${v}%"></div></div><p class="faint" style="margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</p></div>`).join('')}
+      ${([['평정', pr.weights.eval, me.evalsInRank.length ? b.eval : -1, me.evalsInRank.length ? `${me.rank} ${me.evalsInRank.length}년치 중 최근 ${Math.min(4, me.evalsInRank.length)}년 평균 · 첫 심사 ${MIN_YEARS[me.rank]}년차` : `올해 말 첫 평정부터 쌓여요 · 심사는 최근 4년만 봐요`], ['경력', pr.weights.career, b.career, careerLine(me)], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
+        .filter((x) => x[1] > 0).map(([l, w, v, d]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(w * 100)}%</span></span><b>${v < 0 ? '아직 없음' : Math.round(v)}</b></div><div class="track light"><div style="width:${Math.max(0, v)}%"></div></div><p class="faint" style="margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</p></div>`).join('')}
     </div>
   </section>` : ''}
   ${yearList(g)}
