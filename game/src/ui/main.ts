@@ -129,6 +129,7 @@ const ui = {
   month: 1,
   wish: [] as string[],
   orderOpen: false,
+  promoOpen: false,
   policy: null as Policy | null,
   ad: { kind: 'eval' as 'eval' | 'reroll', left: 0 },
   pro: null as Prologue | null,
@@ -1007,15 +1008,46 @@ function viewResult(g: GameState, r: YearReport): string {
 // ── 진급 심사 결과 ──
 function viewPromotion(r: YearReport): string {
   const p = r.promotion!;
+  const me = save!.game.me;
+  // v3.4.1 진급 발표: 봉투 → 명단을 한 명씩 → 도장
+  if (!ui.promoOpen) return `
+  <div class="page"><div class="pad">
+    <p class="kicker">${r.year}년 ${p.to} 진급 발표 · ${p.attempt}차 심사</p>
+    <h1 class="h1">진급 예정자 명단이<br>나왔어요</h1>
+    <p class="sub">대상 ${p.candidates}명 중 ${p.selectedCount}명 선발${p.attempt >= p.tries ? ' · 마지막 기회' : ''}</p>
+    <div class="notice" data-act="promo-open" role="button" aria-label="진급 명단 확인">
+      <p class="to">${p.to} 진급 예정자 명단</p>
+      <p class="nt">인사참모부</p>
+      <div class="slot"><b>눌러서 명단 확인</b><span>내 이름이 있을까요?</span></div>
+    </div>
+  </div>
+  <div class="bar"><button class="btn" data-act="promo-open">명단 확인하기</button></div></div>`;
+  const names = [...p.peers.filter((x) => x.selected).map((x) => ({ name: x.name, score: x.score, me: false, rival: x.rival })), ...(p.selected ? [{ name: me.name, score: p.score, me: true, rival: false }] : [])].sort((a, b) => b.score - a.score);
+  const SHOW = 10;
+  const shown = names.slice(0, SHOW);
+  const rest = p.selectedCount - shown.length;
+  const STEP = 0.45;
+  const tEnd = 0.5 + (shown.length + (rest > 0 ? 1 : 0)) * STEP;
+  const nameList = `
+    <section class="doc">
+      <div class="hd"><span>${p.to} 진급 예정자 명단</span><em>${r.year}. 11.</em></div>
+      <div class="bd list">
+        ${shown.map((x, i) => `<div class="kv rise" style="animation-delay:${(0.5 + i * STEP).toFixed(2)}s"><span>${i + 1}</span><b class="${x.me ? 'olive' : ''}">${p.from} ${esc(x.name)}${x.me ? ' (나)' : ''}${x.rival ? ' <span class="chip red">라이벌</span>' : ''}</b></div>`).join('')}
+        ${rest > 0 ? `<div class="kv rise" style="animation-delay:${(0.5 + shown.length * STEP).toFixed(2)}s"><span></span><b class="faint">외 ${rest}명${p.others ? ' (다른 기수 포함)' : ''}</b></div>` : ''}
+        ${!shown.length ? '<p class="sub">올해는 선발된 사람이 없어요.</p>' : ''}
+      </div>
+    </section>
+    <p class="h2 rise" style="text-align:center;margin:14px 0 4px;animation-delay:${tEnd.toFixed(2)}s">${p.selected ? `명단에 <span class="olive">${esc(me.name)}</span>이(가) 있어요` : '명단에 내 이름이 없어요'}</p>`.replace('이(가)', hasJong(me.name) ? '이' : '가');
   const lastTry = !p.selected && p.attempt >= p.tries;
   const w = PROMOTION[p.from]!.weights;
   const parts = ([['평정', w.eval, p.breakdown.eval], ['경력', w.career, p.breakdown.career], ['공적', p.breakdown.merit === undefined ? 0 : w.merit, p.breakdown.merit ?? 0], ['교육', w.edu, p.breakdown.edu], ['전투', w.combat, p.breakdown.combat], ['균형', w.balance, p.breakdown.balance]] as [string, number, number][]).filter((x) => x[1] > 0);
   const peers = [...p.peers].sort((a, b) => b.score - a.score).slice(0, 6);
   return `
   <div class="page"><div class="pad tight">
-    <div class="paper">
+    ${nameList}
+    <div class="paper rise" style="animation-delay:${(tEnd + 0.5).toFixed(2)}s">
       <div class="phead"><div><p class="title">진급 심사 결과</p>
-      <p class="no">${r.year}년 ${p.to} 진급 · ${p.attempt}차 심사</p></div><div class="stamp pop late ${p.selected ? 'olive' : ''}"><b style="font-size:22px">${p.selected ? '선발' : '낙천'}</b><i>${p.score.toFixed(1)}점</i></div></div>
+      <p class="no">${r.year}년 ${p.to} 진급 · ${p.attempt}차 심사</p></div><div class="stamp pop ${p.selected ? 'olive' : ''}" style="animation-delay:${(tEnd + 1).toFixed(2)}s"><b style="font-size:22px">${p.selected ? '선발' : '낙천'}</b><i>${p.score.toFixed(1)}점</i></div></div>
       <div class="meta">
         <div class="kv"><span>심사 대상</span><b>${p.candidates}명${p.others ? ` (다른 기수 ${p.others}명 포함)` : ''}</b></div>
         <div class="kv"><span>선발</span><b>${p.selectedCount}명</b></div>
@@ -1025,11 +1057,13 @@ function viewPromotion(r: YearReport): string {
       ${parts.map(([l, wt, v]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(wt * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track ${l === p.weakest.label && !p.selected ? 'light' : ''}"><div style="width:${v}%"></div></div></div>`).join('')}
       ${!p.selected ? `<div class="opinion">${p.cut !== null && p.cut - p.score <= 3 ? `<p><b>아깝게 떨어졌어요 · ${(Math.round((p.cut - p.score) * 10) / 10).toFixed(1)}점 차</b></p>` : ''}<p class="faint">더 올려볼 항목 · ${p.weakest.label}</p><p>${p.weakest.why}</p></div>` : ''}
     </div>
+    <div class="rise" style="animation-delay:${(tEnd + 1.3).toFixed(2)}s">
     ${p.breakdown.rec ? `<p class="faint" style="margin-top:8px">지휘관 추천 +${p.breakdown.rec}점 포함</p>` : ''}
-    <p class="sec">진급 명단 · 함께 심사받은 동기</p>
-    ${peers.length ? peers.map((x, i) => `<div class="mate rise" style="animation-delay:${0.5 + i * 0.25}s"><div class="g"><b>${esc(x.name)} ${x.rival ? '<span class="chip red">라이벌</span>' : ''}</b><span>${x.origin} · ${x.score.toFixed(1)}점</span></div><span class="chip ${x.selected ? '' : 'gray'}">${x.selected ? '선발' : '낙천'}</span></div>`).join('') : '<p class="sub">함께 심사받은 동기가 없어요.</p>'}
+    <p class="sec">함께 심사받은 동기</p>
+    ${peers.length ? peers.map((x) => `<div class="mate"><div class="g"><b>${esc(x.name)} ${x.rival ? '<span class="chip red">라이벌</span>' : ''}</b><span>${x.origin} · ${x.score.toFixed(1)}점</span></div><span class="chip ${x.selected ? '' : 'gray'}">${x.selected ? '선발' : '낙천'}</span></div>`).join('') : '<p class="sub">함께 심사받은 동기가 없어요.</p>'}
+    </div>
   </div>
-  <div class="bar"><button class="btn" data-act="queue-next">${p.selected ? `${p.to} 계급장 달기` : lastTry ? '다음' : '내년에 다시 도전'}</button></div></div>`;
+  <div class="bar"><button class="btn rise" style="animation-delay:${(tEnd + 1).toFixed(2)}s" data-act="queue-next">${p.selected ? `${p.to} 계급장 달기` : lastTry ? '다음' : '내년에 다시 도전'}</button></div></div>`;
 }
 
 // ── 진급식 ──
@@ -1469,7 +1503,7 @@ function nextInQueue() {
 function buildQueue(r: YearReport, g: GameState): Screen[] {
   const q: Screen[] = [];
   if (ui.medals.length) q.push('medal');
-  if (r.promotion) q.push('promotion');
+  if (r.promotion) { q.push('promotion'); ui.promoOpen = false; }
   if (g.ended) { q.push('ending'); return q; }
   if (r.promotedTo) q.push('promo-ceremony');
   q.push('home');
@@ -1946,6 +1980,7 @@ root.addEventListener('click', (e) => {
       go('order');
       break;
     }
+    case 'promo-open': ui.promoOpen = true; render(); window.scrollTo(0, 0); break;
     case 'order-open': ui.orderOpen = true; render(); window.scrollTo(0, 0); break;
     case 'policy': ui.policy = v as Policy; render(); break;
     case 'policy-ok': (save!.log ??= []).push({ y: g!.year, p: ui.policy }); save!.game = setPolicy(g!, ui.policy!); persist(); nextInQueue(); break;
