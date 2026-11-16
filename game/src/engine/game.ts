@@ -1,7 +1,7 @@
 import type { Corps } from '../data/billets';
 // 게임 진행: 새 게임 → (결재 2건 → 1년 보내기 → 진급 → 인사 → 지휘 방침) 반복. 화면 코드는 여기에 없다.
 import { CHOICE_BY_ID } from '../data/choices';
-import { ASSIGNMENTS, AUTO_PROMOTE, GENERAL_TERM, MIN_YEARS, PROMOTION, RANKS, REQUIRED_BILLET } from '../data/config';
+import { ASSIGNMENTS, AUTO_PROMOTE, GENERAL_TERM, MIN_YEARS, PROMOTION, RANKS, REQUIRED_BILLET, SURNAMES, GIVEN_NAMES } from '../data/config';
 import { buildDesk, npcPick, resolveChoice } from './choice';
 import { overall } from './growth';
 import { createCohort, createOfficer, npcFocus, stepOfficer } from './officer';
@@ -163,6 +163,7 @@ export function advanceYear(state: GameState, focus: [StatKey, StatKey]): { next
       const result: PromotionResult = {
         from: rank, to: r.to, attempt, tries, selected, score: meCand.score, cut: r.cut,
         candidates: r.scored.length + r.others, selectedCount: r.selectedIds.size + r.othersSelected, others: r.others, breakdown: meCand.breakdown, weakest: weakest(me),
+        othersPicked: r.othersPicked.map((sc, i) => { const k = createRng(s.seed * 31 + s.year * 7 + RANKS.indexOf(rank) * 101 + i); return { name: k.pick(SURNAMES) + k.pick(GIVEN_NAMES), gap: k.int(-3, 3) || 1, score: sc }; }),
         peers: r.scored.filter((c) => c.o !== me).map((c) => ({ name: c.o.name, origin: c.o.origin, selected: r.selectedIds.has(c.o.id), score: c.score, rival: c.o.id === rivalId })),
       };
       report.promotion = result;
