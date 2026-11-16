@@ -57,6 +57,8 @@ export type LongService = 'exempt' | 'pending' | 'retry' | 'passed';
 
 export interface Officer {
   /** v3.4 병과 (없으면 계열에서) · 지금 부대 종류 · 부대 종류별 근무 연수 */
+  /** v3.4.1 마지막 심사 낙천 뒤 '정년까지 근무'를 고르면 남은 연수 (0이 되면 전역). 'ask' = 아직 안 고름 */
+  capped?: number | 'ask';
   corps?: import('../data/billets').Corps; utype?: import('../data/billets').UnitType; service?: Partial<Record<import('../data/billets').UnitType, number>>;
   id: string;
   name: string;
@@ -118,6 +120,8 @@ export interface OfficerLog {
   bestEval: number;
   suStreak: number;
   suStreakBest: number;
+  /** v3.4.1 정년까지 근무를 마침 */
+  servedOut?: boolean;
   /** 연속 실패 수 (보정용) */
   failStreak?: number;
   /** 운 지수: 확률 판정 기대 성공 합 / 실제 성공 / 분산 합 */
@@ -220,7 +224,7 @@ export interface PromotionResult {
   selectedCount: number;
   /** 함께 심사받은 다른 기수 인원 */
   others: number;
-  breakdown: { eval: number; career: number; edu: number; combat: number; balance: number; merit?: number };
+  breakdown: { eval: number; career: number; edu: number; combat: number; balance: number; merit?: number; rec?: number };
   weakest: { label: string; why: string };
   peers: { name: string; origin: Origin; selected: boolean; score: number; rival: boolean }[];
 }
@@ -261,6 +265,8 @@ export interface PersonnelResult {
   note: string;
   unit?: UnitTrait;
   boss?: BossType;
+  /** v3.4.1 지휘관 선발 심사: 1지망이 지휘 보직(중령 이상)일 때 */
+  cmd?: { name: string; applicants: number; quota: number | null; place: number; selected: boolean };
 }
 
 export interface GameState {

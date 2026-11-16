@@ -34,6 +34,36 @@ export function meritLine(o: Officer): string {
   return parts.length ? `최근 4년 ${parts.join(' · ')}` : '최근 4년 공적 없음';
 }
 
+/** v3.4.1 지휘관 추천: 지금 임기에서 평정 우수 이상이 한 번 이상이고 나쁜 일이 없으면 상관이 추천 (+2점) */
+export const RECOMMEND = 2;
+export function recommend(o: Officer): number {
+  const t = o.term;
+  return t && t.good >= 1 && t.bad === 0 ? RECOMMEND : 0;
+}
+
+/** v3.4.1 진급 경쟁 현황: 올해 말 심사를 지금 기준으로 미리 계산 (운 없이). 다른 기수는 평균 ±9를 고르게 */
+export interface Forecast { rank: Rank; to: Rank; score: number; cut: number; gap: number; candidates: number; slots: number; place: number; verdict: '안정권' | '경합' | '위험' }
+export function forecast(me: Officer, cohort: Officer[]): Forecast | null {
+  const rank = me.rank;
+  const p = PROMOTION[rank];
+  if (!p || !hasRequired(me)) return null;
+  const need = MIN_YEARS[rank]!;
+  const due = [me, ...cohort.filter((o) => o.active && !o.capped && o.rank === rank && o.yearsInRank + 1 >= need && hasRequired(o))];
+  const raw = (o: Officer) => { const w = p.weights, b = promotionBreakdown(o); return w.eval * b.eval + w.career * b.career + w.edu * b.edu + w.combat * b.combat + w.balance * b.balance + w.merit * (b.merit ?? 0) + (b.rec ?? 0); };
+  const mine = Math.round(raw(me) * 10) / 10;
+  const scores = due.map(raw);
+  const g = globalThis as { __VM_ADD?: number; __VM?: Partial<Record<Rank, number>> };
+  const base = g.__VM?.[rank] ?? VIRTUAL_MEAN[rank];
+  const nv = base === undefined ? 0 : Math.max(0, REVIEW_POOL - due.length);
+  for (let i = 0; i < nv; i++) scores.push(base! + (g.__VM_ADD ?? 0) - 9 + (18 * (i + 0.5)) / nv);
+  scores.sort((a, b) => b - a);
+  const slots = Math.max(1, Math.round(yearlyRate(rank) * scores.length));
+  const cut = Math.round(scores[Math.min(slots, scores.length) - 1] * 10) / 10;
+  const gap = Math.round((mine - cut) * 10) / 10;
+  const place = scores.filter((x) => x > raw(me)).length + 1;
+  return { rank, to: RANKS[RANKS.indexOf(rank) + 1], score: mine, cut, gap, candidates: scores.length, slots, place, verdict: gap >= 2 ? '안정권' : gap >= -3 ? '경합' : '위험' };
+}
+
 /** 필수 보직을 거쳤는가 (이 계급에서 다음 심사를 받을 자격) */
 export function hasRequired(o: Officer): boolean {
   const req = REQUIRED_BILLET[o.rank];
@@ -55,7 +85,7 @@ export function promotionBreakdown(o: Officer): PromotionResult['breakdown'] {
   const evalAvg = recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : 50;
   const combat = 60 + o.stats.tactics - RANK_BASELINE[o.rank];
   const clamp = (v: number) => Math.max(0, Math.min(100, v));
-  return { eval: clamp(evalAvg), career: clamp(careerScore(o)), edu: clamp(o.eduScore), combat: clamp(combat), balance: balanceScore(o), merit: meritScore(o) };
+  return { eval: clamp(evalAvg), career: clamp(careerScore(o)), edu: clamp(o.eduScore), combat: clamp(combat), balance: balanceScore(o), merit: meritScore(o), rec: recommend(o) };
 }
 
 /** 낙천 설명: 현실적으로 노려볼 수 있는 목표치까지 가중치를 곱해 가장 많이 남은 항목 (이미 높은 항목은 탓하지 않는다) */
@@ -79,7 +109,7 @@ export function weakest(o: Officer): { label: string; why: string } {
 export function promotionScore(o: Officer, rng: Rng): ScoredCandidate {
   const w = PROMOTION[o.rank]!.weights;
   const b = promotionBreakdown(o);
-  const raw = w.eval * b.eval + w.career * b.career + w.edu * b.edu + w.combat * b.combat + w.balance * b.balance + w.merit * (b.merit ?? 0);
+  const raw = w.eval * b.eval + w.career * b.career + w.edu * b.edu + w.combat * b.combat + w.balance * b.balance + w.merit * (b.merit ?? 0) + (b.rec ?? 0);
   const score = Math.round((raw + (rng.next() * 2 - 1) * REVIEW_NOISE) * 10) / 10;
   return { o, score, breakdown: b };
 }
@@ -105,12 +135,12 @@ export const REVIEW_POOL = 10;
 //         장성 단계는 공식 변화(−2.4)만큼 내리고, 중장은 대장 비율을 올리려고 1.5 더 내림
 // v3.3.9: 실제 기록 준장+ 17%(목표 8%) → 대령 +1.3. 장성 경력 만점 규칙으로 장성 점수가 약 +6 → 준장 · 소장 +6, 중장은 대장 비율을 올리려고 +4만
 // v3.4: 병과 9개 · 보직 80여 개로 핵심 경력 · 궁합이 흔해져서 중령 · 대령을 올림. 목표(사람) 준장+ 15% · 중장+ 1% · 대장 0.5% → 봇 mix best 준장+ 약 2.6%
-const VIRTUAL_MEAN: Partial<Record<Rank, number>> = { 중령: 85, 대령: 77, 준장: 79.9, 소장: 80.6, 중장: 77.1 };
+const VIRTUAL_MEAN: Partial<Record<Rank, number>> = { 중령: 87, 대령: 79.2, 준장: 80.4, 소장: 81.1, 중장: 77.6 };
 
 export function runReview(rank: Rank, officers: Officer[], rng: Rng): ReviewOutcome | null {
   if (!PROMOTION[rank]) return null;
   const need = MIN_YEARS[rank]!;
-  const due = officers.filter((o) => o.active && o.rank === rank && o.yearsInRank >= need);
+  const due = officers.filter((o) => o.active && !o.capped && o.rank === rank && o.yearsInRank >= need);
   const eligible = due.filter(hasRequired);
   const excluded = due.filter((o) => !hasRequired(o));
   if (!eligible.length) return excluded.length ? { rank, to: RANKS[RANKS.indexOf(rank) + 1], scored: [], selectedIds: new Set(), cut: null, others: 0, othersSelected: 0, excluded } : null;
