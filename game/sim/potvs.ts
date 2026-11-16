@@ -1,7 +1,7 @@
 import { CHOICE_BY_ID } from '../src/data/choices';
 import { optionOdds, rewardTier } from '../src/engine/choice';
 import { advanceYear, decide, newGame, setPolicy, submitWishes } from '../src/engine/game';
-import { assignmentsFor, isRequired, lacksRequired, wishScore } from '../src/engine/personnel';
+import { openFor, isRequired, lacksRequired, wishScore } from '../src/engine/personnel';
 import { RANKS } from '../src/data/config';
 import type { Potential } from '../src/engine/types';
 declare const process: { argv: string[]; env: Record<string, string> };
@@ -22,7 +22,7 @@ for (const pot of ['S', 'A', 'B', 'C'] as Potential[]) {
     let rnd = (i * 9301 + 49297) % 233280; const R = () => (rnd = (rnd * 9301 + 49297) % 233280) / 233280;
     let g = 0;
     while (!s.ended && g++ < 60) {
-      if (s.personnelDue) { const me = s.me; const pri = (a: { id: string; kind: string }) => (lacksRequired(me) && isRequired(me, a.id) ? 3 : a.kind === '지휘' || a.kind === '요직' ? 1 : 0); const o = assignmentsFor(me.rank).sort((a, b) => strat === 'rand' ? R() - 0.5 : pri(b) - pri(a) || wishScore(me, b) - wishScore(me, a)); s = submitWishes(s, [o[0].id, o[1].id]); continue; }
+      if (s.personnelDue) { const me = s.me; const pri = (a: { id: string; kind: string }) => (lacksRequired(me) && isRequired(me, a.id) ? 3 : a.kind === '지휘' || a.kind === '요직' ? 1 : 0); const o = openFor(me).sort((a, b) => strat === 'rand' ? R() - 0.5 : pri(b) - pri(a) || wishScore(me, b) - wishScore(me, a)); s = submitWishes(s, [o[0].id, o[1].id]); continue; }
       if (s.policyDue) { s = setPolicy(s, '장병 우선'); continue; }
       for (let k = 0; s.desk && k < s.desk.items.length; k++) {
         const def = CHOICE_BY_ID[s.desk.items[k].defId];

@@ -49,11 +49,15 @@ export interface Assignment {
   prestige: number;
   /** 인사 배정 때 가산되는 경험 태그 */
   wantTags: string[];
+  /** v3.4 갈 수 있는 병과 (없으면 공통) · 궁합 병과 · 부대 종류 후보 (src/data/billets.ts) */
+  corps?: string[]; fit?: string[]; units?: string[];
 }
 
 export type LongService = 'exempt' | 'pending' | 'retry' | 'passed';
 
 export interface Officer {
+  /** v3.4 병과 (없으면 계열에서) · 지금 부대 종류 · 부대 종류별 근무 연수 */
+  corps?: import('../data/billets').Corps; utype?: import('../data/billets').UnitType; service?: Partial<Record<import('../data/billets').UnitType, number>>;
   id: string;
   name: string;
   origin: Origin;
@@ -158,7 +162,7 @@ export interface ChoiceDef {
   type: EventType;
   title: string;
   body: string;
-  when: { groups?: RankGroup[]; kinds?: BilletKind[]; ranks?: Rank[] };
+  when: { groups?: RankGroup[]; kinds?: BilletKind[]; ranks?: Rank[]; /** v3.4 이 병과만 */ corps?: string[] };
   options: ChoiceOption[];
   /** 같은 이벤트가 다시 나올 때 쓰는 다른 상황 문구 */
   variants?: { title: string; body: string }[];

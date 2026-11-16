@@ -1,6 +1,7 @@
 // 성장 규칙 (C안): 잠재력·나이가 기본 성장을, 보직·집중 육성이 방향을 정한다.
 // 선택 이벤트 보상은 여기와 별개로 나이와 무관하게 바로 더해진다.
 import { ageFactor, FITNESS_DECLINE_AGE, GROWTH_FLOOR, PATH_WEIGHTS, POTENTIAL, SOFT_CAP, STAT_MAX } from '../data/config';
+import { billetFits, corpsOfO, type Corps } from '../data/billets';
 import type { Rng } from './rng';
 import { STAT_KEYS, type Assignment, type Branch, type Officer, type Path, type StatKey, type Stats } from './types';
 
@@ -39,10 +40,9 @@ export function distribute(me: Officer, points: number, assignmentStats: [StatKe
 }
 
 /** 병과-보직 궁합: 전투↔지휘, 행정↔행정력 보직, 기술↔전문성 보직 */
-export function branchFits(branch: Branch, a: Assignment): boolean {
-  if (branch === '전투') return a.kind === '지휘';
-  if (branch === '행정') return a.kind !== '지휘' && a.grows.includes('admin');
-  return a.kind !== '지휘' && a.grows.includes('expertise');
+/** v3.4 병과 궁합: 보직마다 정해진 병과면 성장 +20% (src/data/billets.ts의 fit) */
+export function branchFits(o: { corps?: Corps; branch: Branch }, a: Assignment): boolean {
+  return billetFits(a, corpsOfO(o));
 }
 
 /** 능력치 직접 가감 (0~99) */

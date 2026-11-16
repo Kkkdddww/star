@@ -8,6 +8,116 @@
 import type { ChoiceDef } from '../engine/types';
 
 export const CHOICES: ChoiceDef[] = [
+
+  // ───────── v3.4 병과별 (위관·영관, 그 병과만) ─────────
+  {
+    id: 'c_inf_march', type: '부대', title: '장거리 행군 계획', when: { groups: ['위관', '영관'], corps: ['보병'] },
+    body: '다음 달 장거리 행군 계획을 세워야 해요. 상급부대는 기록 단축을 기대하고 있어요.',
+    options: [
+      { key: 'a', label: '안전 기준대로 휴식 시간 확보', style: '원칙', desc: '기록은 평범하지만 탈 없이 끝나요', stat: 'command', base: 0, sure: true,
+        success: { text: '모두 무사히 완주했어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '기록 단축에 도전', style: '도전', desc: '체력이 좋으면 좋은 기록이 나와요', stat: 'fitness', base: 40,
+        success: { text: '부대 최고 기록이 나왔어요', eval: 5, stats: { fitness: 1, command: 1 } }, fail: { text: '낙오자가 생겨 일정이 엉켰어요', eval: -3 } },
+      { key: 'c', label: '간부들과 코스를 같이 짜기', style: '소통', desc: '다들 납득하는 계획이 나와요', stat: 'social', base: 55, tags: ['소통'],
+        success: { text: '간부들이 알아서 움직였어요', eval: 3, stats: { social: 1 }, gainTag: '소통' }, fail: { text: '의견이 갈려 계획이 늦어졌어요', eval: -1 } },
+    ],
+  },
+  {
+    id: 'c_art_contest', type: '부대', title: '포반 경연대회 준비', when: { groups: ['위관', '영관'], corps: ['포병'] },
+    body: '포반 경연대회가 한 달 남았어요. 준비를 얼마나 몰아붙일지 정해야 해요.',
+    options: [
+      { key: 'a', label: '평소 일과 안에서 준비', style: '원칙', desc: '무리하지 않아요', stat: 'tactics', base: 0, sure: true,
+        success: { text: '중간 성적으로 무난하게 마쳤어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '주말까지 집중 준비', style: '도전', desc: '잘하면 입상, 피로가 쌓여요', stat: 'tactics', base: 40,
+        success: { text: '대회에서 입상했어요. 표창이 나왔어요', eval: 5, award: '표창' }, fail: { text: '피로 누적으로 실수가 잦았어요', eval: -3 } },
+      { key: 'c', label: '숙련 포반장에게 교육 맡기기', style: '소통', desc: '사람을 믿고 맡겨요', stat: 'social', base: 55,
+        success: { text: '포반장들이 서로 가르치며 실력이 올랐어요', eval: 3, stats: { tactics: 1 } }, fail: { text: '교육 방식이 달라 혼선이 생겼어요', eval: -1 } },
+    ],
+  },
+  {
+    id: 'c_arm_maint', type: '업무', title: '장비 정비 일정이 밀렸어요', when: { groups: ['위관', '영관'], corps: ['기갑'] },
+    body: '훈련 일정 때문에 정비가 계속 밀렸어요. 다음 주 점검이 예정돼 있어요.',
+    options: [
+      { key: 'a', label: '훈련을 줄이고 정비부터', style: '원칙', desc: '점검은 문제없이 넘어가요', stat: 'expertise', base: 0, sure: true,
+        success: { text: '점검을 깔끔하게 통과했어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '야간까지 정비와 훈련을 병행', style: '도전', desc: '둘 다 잡으면 칭찬받아요', stat: 'command', base: 40,
+        success: { text: '훈련과 점검 모두 좋은 평가를 받았어요', eval: 5, stats: { command: 1 } }, fail: { text: '피로가 쌓여 둘 다 어중간했어요', eval: -3 } },
+      { key: 'c', label: '점검표만 먼저 채워 두기', style: '편법', desc: '당장은 넘어가요', stat: 'admin', base: 75,
+        success: { text: '점검은 넘어갔어요', eval: 1, risk: 1 }, fail: { text: '실제 상태와 달라 지적받았어요', eval: -4, risk: 1 } },
+    ],
+  },
+  {
+    id: 'c_eng_civil', type: '사람', title: '마을의 대민 지원 요청', when: { groups: ['위관', '영관'], corps: ['공병'] },
+    body: '근처 마을에서 무너진 농로를 고쳐 달라는 요청이 왔어요. 부대 일정도 빠듯해요.',
+    options: [
+      { key: 'a', label: '정식 승인 절차부터 밟기', style: '원칙', desc: '시간은 걸려도 확실해요', stat: 'admin', base: 0, sure: true,
+        success: { text: '승인 뒤 계획대로 지원했어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '주말에 바로 투입', style: '도전', desc: '빨리 끝내면 큰 칭찬', stat: 'expertise', base: 45,
+        success: { text: '마을에서 감사패가 왔어요. 표창이 나왔어요', eval: 4, award: '표창', stats: { expertise: 1 } }, fail: { text: '준비가 부족해 공사가 늘어졌어요', eval: -3 } },
+      { key: 'c', label: '지자체와 일정부터 맞추기', style: '소통', desc: '서로 편한 때를 찾아요', stat: 'social', base: 55, tags: ['조정'],
+        success: { text: '자재 지원까지 받아 수월하게 끝났어요', eval: 3, gainTag: '조정' }, fail: { text: '조율이 길어져 불만이 나왔어요', eval: -1 } },
+    ],
+  },
+  {
+    id: 'c_sig_check', type: '업무', title: '통신망 점검 주간', when: { groups: ['위관', '영관'], corps: ['정보통신'] },
+    body: '정기 점검 주간인데 장비 교체 작업까지 겹쳤어요.',
+    options: [
+      { key: 'a', label: '점검 먼저, 교체는 다음 달', style: '원칙', desc: '순서대로 해요', stat: 'expertise', base: 0, sure: true,
+        success: { text: '점검을 문제없이 마쳤어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '둘 다 이번 주에 끝내기', style: '도전', desc: '전문성이 높으면 가능해요', stat: 'expertise', base: 40,
+        success: { text: '일정을 앞당겨 칭찬받았어요', eval: 5, stats: { expertise: 1 } }, fail: { text: '작업이 꼬여 다시 해야 했어요', eval: -3 } },
+      { key: 'c', label: '다른 부대 통신반과 나눠 하기', style: '소통', desc: '도움을 받아요', stat: 'social', base: 55,
+        success: { text: '서로 도와 일찍 끝났어요', eval: 3, stats: { social: 1 } }, fail: { text: '역할이 겹쳐 혼선이 생겼어요', eval: -1 } },
+    ],
+  },
+  {
+    id: 'c_int_report', type: '업무', title: '분석 보고서 마감', when: { groups: ['위관', '영관'], corps: ['정보'] },
+    body: '상급부대에 낼 분석 보고서 마감이 내일이에요. 자료가 아직 부족해요.',
+    options: [
+      { key: 'a', label: '있는 자료로 정직하게 쓰기', style: '원칙', desc: '부족한 부분은 부족하다고 써요', stat: 'expertise', base: 0, sure: true,
+        success: { text: '솔직한 보고서로 신뢰를 얻었어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '밤새 자료를 더 모으기', style: '도전', desc: '잘 나오면 크게 인정받아요', stat: 'expertise', base: 40,
+        success: { text: '보고서가 우수 사례로 공유됐어요', eval: 5, stats: { expertise: 1 } }, fail: { text: '마감을 넘겨 지적받았어요', eval: -3 } },
+      { key: 'c', label: '마감 연장을 요청', style: '소통', desc: '사정을 설명해요', stat: 'social', base: 50,
+        success: { text: '하루 연장을 받아 제대로 마쳤어요', eval: 2 }, fail: { text: '연장이 안 돼 급하게 냈어요', eval: -2 } },
+    ],
+  },
+  {
+    id: 'c_sup_count', type: '업무', title: '재물조사 수량이 안 맞아요', when: { groups: ['위관', '영관'], corps: ['군수'] },
+    body: '분기 재물조사에서 장부와 실제 수량이 조금 안 맞아요.',
+    options: [
+      { key: 'a', label: '그대로 보고하고 원인 조사', style: '원칙', desc: '시끄럽지만 깨끗해요', stat: 'admin', base: 0, sure: true,
+        success: { text: '단순 기재 실수로 밝혀졌어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '관련 부서와 같이 다시 확인', style: '소통', desc: '대부분 여기서 풀려요', stat: 'social', base: 55, tags: ['조정'],
+        success: { text: '다른 창고에 있던 걸 찾았어요', eval: 3, gainTag: '조정' }, fail: { text: '확인이 길어져 보고가 늦었어요', eval: -2 } },
+      { key: 'c', label: '장부를 실제에 맞춰 두기', style: '편법', desc: '당장은 맞아 보여요', stat: 'admin', base: 80,
+        success: { text: '조용히 넘어갔어요', eval: 1, risk: 1 }, fail: { text: '감사에서 드러나 견책을 받았어요', eval: -5, risk: 1 } },
+    ],
+  },
+  {
+    id: 'c_hr_counsel', type: '사람', title: '인사 고충 상담이 몰렸어요', when: { groups: ['위관', '영관'], corps: ['인사'] },
+    body: '정기 인사를 앞두고 고충 상담 신청이 한꺼번에 몰렸어요.',
+    options: [
+      { key: 'a', label: '접수 순서대로 차근차근', style: '원칙', desc: '공정하게 처리해요', stat: 'admin', base: 0, sure: true,
+        success: { text: '불만 없이 마무리됐어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '한 명씩 깊이 면담', style: '소통', desc: '시간이 들지만 신뢰가 쌓여요', stat: 'social', base: 55, tags: ['소통'],
+        success: { text: '간부들 사이에 믿을 만한 사람으로 소문났어요', eval: 3, stats: { social: 1 }, gainTag: '소통' }, fail: { text: '다른 업무가 밀렸어요', eval: -2 } },
+      { key: 'c', label: '상담 제도를 새로 만들기', style: '도전', desc: '잘되면 우수 사례', stat: 'admin', base: 40,
+        success: { text: '상담 제도가 우수 사례로 뽑혔어요. 표창이 나왔어요', eval: 5, award: '표창' }, fail: { text: '새 제도가 자리 잡지 못했어요', eval: -3 } },
+    ],
+  },
+  {
+    id: 'c_fin_settle', type: '업무', title: '정산 서류에서 오류 발견', when: { groups: ['위관', '영관'], corps: ['재정'] },
+    body: '이미 결재가 끝난 정산 서류에서 금액 오류를 발견했어요. 다른 부서의 실수예요.',
+    options: [
+      { key: 'a', label: '바로 알리고 정정 절차', style: '원칙', desc: '일은 늘지만 정확해요', stat: 'admin', base: 0, sure: true,
+        success: { text: '빨리 바로잡아 문제가 커지지 않았어요', eval: 1 }, fail: { text: '', eval: 0 } },
+      { key: 'b', label: '담당자와 조용히 함께 고치기', style: '소통', desc: '관계도 지키고 정확하게', stat: 'social', base: 55,
+        success: { text: '담당 부서가 고마워했어요', eval: 3, stats: { social: 1 } }, fail: { text: '정정이 늦어져 같이 지적받았어요', eval: -2 } },
+      { key: 'c', label: '검증 절차를 새로 제안', style: '도전', desc: '재발을 막으면 크게 인정받아요', stat: 'expertise', base: 40,
+        success: { text: '새 검증 절차가 채택됐어요', eval: 5, stats: { expertise: 1 } }, fail: { text: '제안이 업무만 늘린다며 반려됐어요', eval: -3 } },
+    ],
+  },
   // ───────── 부대 (지휘 보직) ─────────
   {
     id: 'leave_return', type: '부대', title: '휴가 복귀가 늦어진 병사', when: { groups: ['위관'], kinds: ['지휘'] },

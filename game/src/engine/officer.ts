@@ -1,3 +1,4 @@
+import { CORPS, CORPS_BRANCH, DEFAULT_CORPS, FIRST_BILLET, UNIT_TYPES, type Corps } from '../data/billets';
 // 장교 한 명 만들기 + 1년 보내기. 플레이어와 동기 NPC가 똑같이 이 함수를 쓴다.
 import { ASSIGNMENTS, AWAKEN_AGE_LIMIT, AWAKEN_CHANCE, AWAKEN_MAX, BRANCH_BONUS, BRANCH_FIT_MULT, COHORT_SIZE, GIVEN_NAMES, NPC_BRANCH, NPC_PATH, NPC_POTENTIAL, ORIGIN, PERSONALITIES, PERSONALITY, POLICY, START_AGE, START_STATS, SURNAMES } from '../data/config';
 import { rankGroup } from './choice';
@@ -17,18 +18,20 @@ export function weighted<T>(table: [T, number][], rng: Rng): T {
 }
 export const ORIGIN_TABLE = (Object.keys(ORIGIN) as Origin[]).map((o) => [o, ORIGIN[o].weight] as [Origin, number]);
 
-export function createOfficer(o: { id: string; name: string; origin: Origin; branch: Branch; path: Path; potential: Potential; personality?: Personality; schoolPct?: number; bonus?: Partial<Stats> }): Officer {
+export function createOfficer(o: { id: string; name: string; origin: Origin; branch: Branch; corps?: Corps; path: Path; potential: Potential; personality?: Personality; schoolPct?: number; bonus?: Partial<Stats> }): Officer {
+  const corps = o.corps ?? DEFAULT_CORPS[o.branch];
+  const first = FIRST_BILLET[corps];
   const stats: Stats = { ...START_STATS };
   for (const [k, v] of Object.entries(BRANCH_BONUS[o.branch])) stats[k as StatKey] += v!;
   for (const [k, v] of Object.entries(ORIGIN[o.origin].stats)) stats[k as StatKey] += v!;
   for (const [k, v] of Object.entries(o.bonus ?? {})) stats[k as StatKey] += v!;
   return {
-    id: o.id, name: o.name, origin: o.origin, branch: o.branch, path: o.path, personality: o.personality ?? '성실파',
+    id: o.id, name: o.name, origin: o.origin, branch: CORPS_BRANCH[corps], corps, service: {}, path: o.path, personality: o.personality ?? '성실파',
     rank: '소위', yearsInRank: 0, age: START_AGE, stats,
     hidden: { potential: o.potential, risk: 0 },
-    assignmentId: 'platoon', yearsInAssignment: 0,
+    assignmentId: first, yearsInAssignment: 0,
     active: true, evals: [], evalsInRank: [],
-    rankLog: { core: false, support: [] }, merit: [], meritSeen: { a: 0, m: 0 }, billets: ['platoon'], tags: [],
+    rankLog: { core: false, support: [] }, merit: [], meritSeen: { a: 0, m: 0 }, billets: [first], tags: [],
     longService: ORIGIN[o.origin].longServiceExempt ? 'exempt' : 'pending',
     eduScore: 60, eduDone: 0, reviewFails: 0, awakenings: 0, eventLog: {}, chains: [],
     schoolPct: o.schoolPct ?? 50,
@@ -51,6 +54,12 @@ export function createCohort(rng: Rng, playerName: string): Officer[] {
       id: `npc${i}`, name, origin: weighted(ORIGIN_TABLE, rng), branch: weighted(NPC_BRANCH, rng),
       path, potential, personality, schoolPct: rng.int(1, 99),
     }));
+    // v3.4 동기 병과: 계열 안에서 순번으로 (기존 난수 흐름을 바꾸지 않게)
+    const last = list[list.length - 1];
+    const pool = CORPS.filter((c) => CORPS_BRANCH[c] === last.branch);
+    last.corps = pool[i % pool.length];
+    last.assignmentId = FIRST_BILLET[last.corps];
+    last.billets = [last.assignmentId];
   }
   return list;
 }
@@ -78,13 +87,15 @@ export interface StepResult {
 export function stepOfficer(o: Officer, year: number, focus: [StatKey, StatKey], desk: DeskResult[], rng: Rng): StepResult {
   const a = ASSIGNMENTS.find((x) => x.id === o.assignmentId)!;
   const overallBefore = overall(o.stats, o.path);
-  const fit = branchFits(o.branch, a);
+  const fit = branchFits(o, a);
   const points = Math.round(growthPoints(o, rng) * (fit ? BRANCH_FIT_MULT : 1) * termGrowth(o));
   const deltas = distribute(o, points, a.grows, focus);
   for (const k of STAT_KEYS) o.stats[k] += deltas[k] ?? 0;
   // 결재로 바뀐 능력치도 올해 변화에 보여준다
   for (const d of desk) for (const [k, v] of Object.entries(d.outcome.stats ?? {})) deltas[k as StatKey] = (deltas[k as StatKey] ?? 0) + v!;
   if (o.policy && POLICY[o.policy].social) addStats(o, { social: POLICY[o.policy].social }, deltas);
+  // v3.4 부대 종류: 해마다 붙는 능력치 + 근무 연수
+  if (o.utype) { addStats(o, UNIT_TYPES[o.utype].stats, deltas); (o.service ??= {})[o.utype] = (o.service[o.utype] ?? 0) + 1; }
   if (o.term && BOSSES[o.term.boss].social) addStats(o, { social: BOSSES[o.term.boss].social }, deltas);
 
   const events = buildYearEvents(o, year, desk, rng);

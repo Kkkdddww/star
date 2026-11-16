@@ -7,7 +7,7 @@ import { RANKS } from '../src/data/config';
 import { POT_ROLL } from '../src/engine/candidates';
 import { optionOdds, rewardTier } from '../src/engine/choice';
 import { advanceYear, decide, newGame, setPolicy, submitWishes } from '../src/engine/game';
-import { assignmentsFor, isRequired, lacksRequired, wishScore } from '../src/engine/personnel';
+import { openFor, isRequired, lacksRequired, wishScore } from '../src/engine/personnel';
 import type { Branch, Path, Potential } from '../src/engine/types';
 declare const process: { argv: string[]; env: Record<string, string> };
 
@@ -29,7 +29,7 @@ function play(i: number, bot: string) {
       const me = s.me;
       const pri = (a: { id: string; kind: string }) => (lacksRequired(me) && isRequired(me, a.id) ? 3 : a.kind === '지휘' || a.kind === '요직' ? 1 : 0);
       const sm = smart();
-      const o = assignmentsFor(me.rank).sort((a, b) => sm ? pri(b) - pri(a) || wishScore(me, b) - wishScore(me, a) : R() - 0.5);
+      const o = openFor(me).sort((a, b) => sm ? pri(b) - pri(a) || wishScore(me, b) - wishScore(me, a) : R() - 0.5);
       s = submitWishes(s, [o[0].id, o[1].id]); continue;
     }
     if (s.policyDue) { s = setPolicy(s, '장병 우선'); continue; }

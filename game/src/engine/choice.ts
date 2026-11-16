@@ -1,3 +1,4 @@
+import { corpsOfO } from '../data/billets';
 // 선택 이벤트: 확률 계산, 결재함 구성, 결과 적용. 플레이어와 동기 NPC가 같은 규칙을 쓴다.
 import { CHOICES, CHOICE_BY_ID } from '../data/choices';
 import { ASSIGNMENTS, ODDS, PERSONALITY, PITY, RANK_BASELINE, REWARD_TIERS, RISK_MAX } from '../data/config';
@@ -35,6 +36,7 @@ function eligible(def: ChoiceDef, o: Officer): boolean {
   if (def.when.ranks && !def.when.ranks.includes(o.rank)) return false;
   if (def.when.groups && !def.when.groups.includes(rankGroup(o.rank))) return false;
   if (def.when.kinds && !def.when.kinds.includes(billetKindOf(o.assignmentId))) return false;
+  if (def.when.corps && !def.when.corps.includes(corpsOfO(o))) return false;
   return true;
 }
 

@@ -100,6 +100,8 @@ export const TITLES: TitleDef[] = [
   { id: 'clean', name: '흠잡을 데 없는', cond: '마음에 걸리는 일 없이 평정 탁월 5회 이상' },
   { id: 'star', name: '별을 단 사람', cond: '장성 진급' },
   { id: 'straight', name: '정공법', cond: '후보 다시 뽑기 없이 장성 진급' },
+  { id: 'pko', name: '파병 용사', cond: '해외 파병(평화유지 활동) 근무' },
+  { id: 'teacher', name: '교관 출신', cond: '교육기관 6년 이상 근무' },
 ];
 
 export function earnedTitles(s: GameState): string[] {
@@ -110,7 +112,7 @@ export function earnedTitles(s: GameState): string[] {
   if (me.schoolPct <= 1) t.push('top_grad');
   else if (me.schoolPct <= 10) t.push('honor_grad');
   if (me.log.hardWay) t.push('hard_way');
-  if (me.billets.includes('chief')) t.push('chief');
+  if (me.billets.includes('chief') || me.billets.includes('jcs_chair')) t.push('chief');
   if (me.billets.includes('commander')) t.push('apex');
   if (me.log.firstInCohort.length) t.push('first');
   if (kinds.filter((k) => k === '지휘').length >= 4) t.push('field');
@@ -118,6 +120,8 @@ export function earnedTitles(s: GameState): string[] {
   if (me.hidden.risk === 0 && su >= 5) t.push('clean');
   if (ri(me.rank) >= ri('준장')) t.push('star');
   if (ri(me.rank) >= ri('준장') && s.creation && s.creation.rerolls === 0) t.push('straight');
+  if (me.service?.해외파병) t.push('pko');
+  if ((me.service?.교육기관 ?? 0) >= 6) t.push('teacher');
   return t;
 }
 export const titleName = (id: string) => TITLES.find((t) => t.id === id)?.name ?? id;
@@ -133,6 +137,7 @@ export function honorScore(g: GameState): { total: number; parts: { label: strin
     { label: '표창', v: me.log.awards.length * 3 + me.log.majorAwards * 8 },
     { label: '무사고 지휘', v: me.log.cleanCommandBest * 2 },
     { label: '원칙을 지킨 중대 사건', v: me.log.principled * 4 },
+    ...(me.service?.해외파병 ? [{ label: '해외 파병', v: 10 }] : []),
     { label: '마음에 걸리는 일', v: -me.hidden.risk * 5 },
   ];
   return { total: Math.max(0, parts.reduce((s, x) => s + x.v, 0)), parts: parts.filter((x) => x.v) };

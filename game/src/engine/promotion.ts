@@ -104,7 +104,8 @@ export const REVIEW_POOL = 10;
 // v3.3.4: 공적 15%(평균 60대라 전체 점수 −2쯤) + 잠재력 격차 축소(성장↑)를 반영해 다시 맞춤. 봇 대령+ · 준장+는 v3.3과 같게,
 //         장성 단계는 공식 변화(−2.4)만큼 내리고, 중장은 대장 비율을 올리려고 1.5 더 내림
 // v3.3.9: 실제 기록 준장+ 17%(목표 8%) → 대령 +1.3. 장성 경력 만점 규칙으로 장성 점수가 약 +6 → 준장 · 소장 +6, 중장은 대장 비율을 올리려고 +4만
-const VIRTUAL_MEAN: Partial<Record<Rank, number>> = { 중령: 77, 대령: 77.1, 준장: 79.9, 소장: 80.6, 중장: 77.1 };
+// v3.4: 병과 9개 · 보직 80여 개로 핵심 경력 · 궁합이 흔해져서 중령 · 대령을 올림. 목표(사람) 준장+ 15% · 중장+ 1% · 대장 0.5% → 봇 mix best 준장+ 약 2.6%
+const VIRTUAL_MEAN: Partial<Record<Rank, number>> = { 중령: 85, 대령: 77, 준장: 79.9, 소장: 80.6, 중장: 77.1 };
 
 export function runReview(rank: Rank, officers: Officer[], rng: Rng): ReviewOutcome | null {
   if (!PROMOTION[rank]) return null;

@@ -71,7 +71,7 @@ function milestones(me: Officer, rng: Rng): YearEvent[] {
       ends: !pass && lastTry, longService: pass ? 'passed' : 'retry',
     });
   }
-  const course = me.rank === '대위' && me.yearsInRank === 0 ? '대위 보수교육' : me.rank === '소령' && me.yearsInRank === 0 ? '상급 지휘참모과정' : null;
+  const course = me.yearsInRank !== 0 ? null : me.rank === '대위' ? '고등군사반' : me.rank === '소령' ? '합동군사대학' : me.rank === '대령' ? '안보과정' : null;
   if (course) {
     const s = me.stats.expertise - RANK_BASELINE[me.rank] + 60 + rng.int(-10, 10);
     const size = rng.int(36, 64);
