@@ -55,9 +55,9 @@ export const BILLETS: Assignment[] = [
   B('eng_platoon', '공병 소대장', LT, '지휘', ['command', 'expertise'], 60, { corps: ['공병'], units: ['전방', '군단직할'] }),
   B('sig_platoon', '통신 소대장', LT, '지휘', ['expertise', 'command'], 60, { corps: ['정보통신'], units: ['군단직할', '후방'] }),
   B('sup_platoon', '보급 소대장', LT, '지휘', ['admin', 'command'], 60, { corps: ['군수'], units: ['군수지원', '후방'] }),
-  B('s2_lt', '대대 정보장교(S2)', LT, '참모', ['expertise', 'tactics'], 58, { fit: ['정보'] }),
-  B('s1_lt', '대대 인사장교(S1)', LT, '참모', ['admin', 'social'], 58, { fit: ['인사'] }),
-  B('s4_lt', '대대 군수장교(S4)', LT, '참모', ['admin', 'expertise'], 58, { fit: ['군수'] }),
+  B('s2_lt', '대대 정보장교', LT, '참모', ['expertise', 'tactics'], 58, { fit: ['정보'] }),
+  B('s1_lt', '대대 인사장교', LT, '참모', ['admin', 'social'], 58, { fit: ['인사'] }),
+  B('s4_lt', '대대 군수장교', LT, '참모', ['admin', 'expertise'], 58, { fit: ['군수'] }),
   B('fin_lt', '재정장교', LT, '참모', ['admin', 'expertise'], 58, { corps: ['재정'], units: ['후방', '군수지원'] }),
   B('adjutant', '부관', LT, '참모', ['admin', 'social'], 56, { fit: ['인사', '재정'], units: ['후방'] }),
 
@@ -70,7 +70,7 @@ export const BILLETS: Assignment[] = [
   B('int_company', '정보 중대장', ['대위'], '지휘', ['expertise', 'tactics'], 75, { corps: ['정보'], units: ['군단직할', '전방'] }),
   B('sup_company', '보급 중대장', ['대위'], '지휘', ['admin', 'command'], 75, { corps: ['군수'], units: ['군수지원'] }),
   B('hq_company', '본부 근무중대장', ['대위'], '지휘', ['admin', 'command'], 72, { corps: ADMIN, units: ['후방', '군단직할'] }),
-  B('bn_staff', '대대 작전장교(S3)', ['대위'], '참모', ['tactics', 'admin'], 60, { fit: FIGHT }),
+  B('bn_staff', '대대 작전장교', ['대위'], '참모', ['tactics', 'admin'], 60, { fit: FIGHT }),
   B('div_hr', '사단 인사장교', ['대위'], '참모', ['admin', 'social'], 62, { fit: ['인사'], units: FIELD }),
   B('div_fin', '사단 재정장교', ['대위'], '참모', ['admin', 'expertise'], 62, { corps: ['재정'] }),
   B('political', '정훈장교', ['대위'], '참모', ['social', 'admin'], 58, { fit: ADMIN }),
@@ -79,8 +79,8 @@ export const BILLETS: Assignment[] = [
 
   // ── 소령 ──
   B('ind_company', '독립중대장', ['소령'], '지휘', ['command', 'tactics'], 75, { fit: FIGHT, units: ['군단직할', '전방'] }),
-  B('div_staff_m', '사단 참모부 장교(G1~G4)', ['소령'], '요직', ['admin', 'expertise'], 75, { fit: ALL }),
-  B('bn_ops', '대대 작전과장(S3)', ['소령'], '참모', ['tactics', 'admin'], 65, { fit: FIGHT }),
+  B('div_staff_m', '사단 참모부 장교', ['소령'], '요직', ['admin', 'expertise'], 75, { fit: ALL }),
+  B('bn_ops', '대대 작전과장', ['소령'], '참모', ['tactics', 'admin'], 65, { fit: FIGHT }),
   B('deputy_bn', '부대대장', ['소령'], '참모', ['command', 'admin'], 65, { fit: FIGHT }),
   B('reg_staff', '연대 참모', ['소령'], '참모', ['admin', 'expertise'], 63, { fit: ALL }),
   B('inst_m', '병과학교 교관', ['소령'], '교육', ['expertise', 'social'], 65, { fit: TECH, units: ['교육기관'] }),
@@ -97,7 +97,7 @@ export const BILLETS: Assignment[] = [
   B('hq_bn', '근무지원 대대장', ['중령'], '지휘', ['admin', 'expertise'], 78, { corps: ADMIN, units: ['후방', '군단직할'] }),
   B('corps_staff', '군단 참모', ['중령'], '요직', ['admin', 'social'], 80, { fit: [...FIGHT, ...ADMIN], units: ['군단직할'] }),
   B('army_hq_l', '육군본부 장교', ['중령'], '요직', ['admin', 'expertise'], 80, { fit: [...ADMIN, '군수'], units: ['정책부서'] }),
-  B('div_staff_l', '사단 참모(G1~G4)', ['중령'], '참모', ['admin', 'expertise'], 70, { fit: ALL }),
+  B('div_staff_l', '사단 참모', ['중령'], '참모', ['admin', 'expertise'], 70, { fit: ALL }),
   B('inspector', '감찰참모', ['중령'], '참모', ['admin', 'social'], 68, { fit: ADMIN }),
   B('inst_l', '합동군사대학 교수', ['중령'], '교육', ['expertise', 'social'], 70, { fit: TECH, units: ['교육기관'] }),
 
