@@ -1025,19 +1025,25 @@ function viewPromotion(r: YearReport): string {
     </div>
   </div>
   <div class="bar"><button class="btn" data-act="promo-open">명단 확인하기</button></div></div>`;
-  const names = [...p.peers.filter((x) => x.selected).map((x) => ({ name: x.name, score: x.score, me: false, rival: x.rival })), ...(p.selected ? [{ name: me.name, score: p.score, me: true, rival: false }] : [])].sort((a, b) => b.score - a.score);
+  // 선발자: 동기 · 나 · 다른 기수(이름은 세상 시드). 점수 순 = 명단 순서
+  const names = [
+    ...p.peers.filter((x) => x.selected).map((x) => ({ name: x.name, score: x.score, tag: x.rival ? '라이벌' : '동기', me: false })),
+    ...(p.selected ? [{ name: me.name, score: p.score, tag: '나', me: true }] : []),
+    ...(p.othersPicked ?? []).map((x) => ({ name: x.name, score: x.score, tag: x.gap < 0 ? `${-x.gap}기 선배` : `${x.gap}기 후배`, me: false })),
+  ].sort((a, b) => b.score - a.score);
   const SHOW = 10;
   const shown = names.slice(0, SHOW);
   const rest = p.selectedCount - shown.length;
-  const STEP = 0.45;
-  const tEnd = 0.5 + (shown.length + (rest > 0 ? 1 : 0)) * STEP;
+  // 한 칸씩 채운다. 마지막 칸은 한 박자 더 늦게
+  const at = (i: number) => 0.9 + i * 0.75 + (i === shown.length - 1 && shown.length > 1 ? 0.9 : 0);
+  const tEnd = (shown.length ? at(shown.length - 1) : 0.6) + 0.9;
   const nameList = `
     <section class="doc">
-      <div class="hd"><span>${p.to} 진급 예정자 명단</span><em>${r.year}. 11.</em></div>
+      <div class="hd"><span>${p.to} 진급 예정자 명단</span><em>선발 ${p.selectedCount}명 · 대상 ${p.candidates}명</em></div>
       <div class="bd list">
-        ${shown.map((x, i) => `<div class="kv rise" style="animation-delay:${(0.5 + i * STEP).toFixed(2)}s"><span>${i + 1}</span><b class="${x.me ? 'olive' : ''}">${p.from} ${esc(x.name)}${x.me ? ' (나)' : ''}${x.rival ? ' <span class="chip red">라이벌</span>' : ''}</b></div>`).join('')}
-        ${rest > 0 ? `<div class="kv rise" style="animation-delay:${(0.5 + shown.length * STEP).toFixed(2)}s"><span></span><b class="faint">외 ${rest}명${p.others ? ' (다른 기수 포함)' : ''}</b></div>` : ''}
-        ${!shown.length ? '<p class="sub">올해는 선발된 사람이 없어요.</p>' : ''}
+        ${shown.map((x, i) => `<div class="kv ln"><span>${i + 1}</span><b><i class="bl" style="animation-delay:${at(i).toFixed(2)}s"></i><span class="rise" style="animation-delay:${at(i).toFixed(2)}s"><span class="${x.me ? 'olive' : ''}">${p.from} ${esc(x.name)}</span> <span class="chip ${x.me ? 'on' : x.tag === '라이벌' ? 'red' : 'gray'}">${x.tag}</span></span></b></div>`).join('')}
+        ${rest > 0 ? `<div class="kv"><span></span><b class="faint">외 ${rest}명</b></div>` : ''}
+        ${!p.selectedCount ? '<p class="sub">올해는 선발된 사람이 없어요.</p>' : ''}
       </div>
     </section>
     <p class="h2 rise" style="text-align:center;margin:14px 0 4px;animation-delay:${tEnd.toFixed(2)}s">${p.selected ? `명단에 <span class="olive">${esc(me.name)}</span>이(가) 있어요` : '명단에 내 이름이 없어요'}</p>`.replace('이(가)', hasJong(me.name) ? '이' : '가');

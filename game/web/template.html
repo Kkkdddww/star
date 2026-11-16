@@ -328,6 +328,8 @@ html.calm *,html.calm *::before,html.calm *::after{animation-duration:.01ms!impo
 .medal-ov .ms{position:relative;color:var(--sub);font-size:15px;margin-top:6px}
 .medal-ov .mh{position:relative;color:var(--faint);font-size:13px;margin-top:40px}
 .medal-ov .rise{opacity:0;animation:rise .5s ease forwards}
+.ln b{position:relative;min-width:150px;min-height:22px;text-align:right}.ln .bl{position:absolute;right:0;top:50%;width:140px;height:12px;margin-top:-6px;border-radius:6px;background:var(--line);animation:blOut .25s ease forwards}
+@keyframes blOut{to{opacity:0}}
 @media (prefers-reduced-motion:reduce){.medal-ov *{animation-duration:.01s!important;animation-delay:0s!important;animation-iteration-count:1!important}}
 /* 전역 화면 랭킹 올리기 */
 .upbox{background:#fff;border-radius:22px;padding:20px;border:2px solid var(--olive)}

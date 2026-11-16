@@ -123,6 +123,8 @@ export interface ReviewOutcome {
   rank: Rank; to: Rank; scored: ScoredCandidate[]; selectedIds: Set<string>; cut: number | null;
   /** 함께 심사받은 다른 기수(가상) 인원과 그중 선발 수 */
   others: number; othersSelected: number;
+  /** v3.4.1 선발된 다른 기수(가상)의 점수 (발표 명단용) */
+  othersPicked: number[];
   /** 필수 보직을 못 거쳐 심사에서 빠진 사람 */
   excluded: Officer[];
 }
@@ -143,7 +145,7 @@ export function runReview(rank: Rank, officers: Officer[], rng: Rng): ReviewOutc
   const due = officers.filter((o) => o.active && !o.capped && o.rank === rank && o.yearsInRank >= need);
   const eligible = due.filter(hasRequired);
   const excluded = due.filter((o) => !hasRequired(o));
-  if (!eligible.length) return excluded.length ? { rank, to: RANKS[RANKS.indexOf(rank) + 1], scored: [], selectedIds: new Set(), cut: null, others: 0, othersSelected: 0, excluded } : null;
+  if (!eligible.length) return excluded.length ? { rank, to: RANKS[RANKS.indexOf(rank) + 1], scored: [], selectedIds: new Set(), cut: null, others: 0, othersSelected: 0, othersPicked: [], excluded } : null;
   const scored = eligible.map((o) => promotionScore(o, rng)).sort((a, b) => b.score - a.score);
   const g = globalThis as { __VM_ADD?: number; __VM?: Partial<Record<Rank, number>> };
   const base = g.__VM?.[rank] ?? VIRTUAL_MEAN[rank];
@@ -155,6 +157,6 @@ export function runReview(rank: Rank, officers: Officer[], rng: Rng): ReviewOutc
   const selectedIds = new Set(selected.filter((x) => x.id).map((x) => x.id!));
   return {
     rank, to: RANKS[RANKS.indexOf(rank) + 1], scored, selectedIds, cut: n ? selected[n - 1].score : null,
-    others: virtual.length, othersSelected: selected.filter((x) => !x.id).length, excluded,
+    others: virtual.length, othersSelected: selected.filter((x) => !x.id).length, othersPicked: selected.filter((x) => !x.id).map((x) => x.score), excluded,
   };
 }

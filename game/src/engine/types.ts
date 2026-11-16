@@ -227,6 +227,8 @@ export interface PromotionResult {
   breakdown: { eval: number; career: number; edu: number; combat: number; balance: number; merit?: number; rec?: number };
   weakest: { label: string; why: string };
   peers: { name: string; origin: Origin; selected: boolean; score: number; rival: boolean }[];
+  /** v3.4.1 선발된 다른 기수 (이름은 표시용, 세상 시드로 정해짐) */
+  othersPicked?: { name: string; gap: number; score: number }[];
 }
 
 export interface YearReport {
