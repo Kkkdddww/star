@@ -130,6 +130,7 @@ const ui = {
   wish: [] as string[],
   orderOpen: false,
   promoOpen: false,
+  promoFirst: false,
   policy: null as Policy | null,
   ad: { kind: 'eval' as 'eval' | 'reroll', left: 0 },
   pro: null as Prologue | null,
@@ -425,8 +426,8 @@ function viewFocus(): string {
     <p class="sub">2개를 골라 주세요. 졸업 석차와 첫 능력치가 달라져요.</p>
     <div class="pick" style="margin-top:14px">${(Object.keys(SCHOOL_FOCUS) as SchoolFocus[]).map((f) => `<button class="pk ${p.focus.includes(f) ? 'on' : ''}" data-act="p-focus" data-v="${f}"><b>${f}</b><span>${SCHOOL_FOCUS[f].desc}</span></button>`).join('')}</div>
     <p class="lbl">희망 병과</p>
-    ${(['전투', '기술', '행정'] as Branch[]).map((b) => `<p class="faint" style="margin:10px 2px 6px">${b} 계열</p><div class="pick three">${CORPS.filter((c) => CORPS_BRANCH[c] === b).map((c) => `<button class="pk ${p.corps === c ? 'on' : ''}" data-act="p-corps" data-v="${c}"><b>${c}</b><span>${CORPS_DESC[c]}</span></button>`).join('')}</div>`).join('')}
-    <p class="faint">석차가 낮으면 희망 병과가 안 될 수도 있어요</p>
+    ${(['전투', '기술', '행정'] as Branch[]).map((b) => `<div class="crow"><span>${b}</span>${CORPS.filter((c) => CORPS_BRANCH[c] === b).map((c) => `<button class="pk ${p.corps === c ? 'on' : ''}" data-act="p-corps" data-v="${c}"><b>${c}</b></button>`).join('')}</div>`).join('')}
+    <p class="faint" style="margin-top:8px">${p.corps ? `<b style="color:var(--ink)">${p.corps}</b> · ${CORPS_DESC[p.corps]}<br>` : ''}9개 병과 중 하나 · 석차가 낮으면 희망 병과가 안 될 수도 있어요</p>
   </div>
   <div class="bar"><button class="btn" data-act="p-study" ${ok ? '' : 'disabled'}>${ok ? '생도 생활 시작' : `${2 - p.focus.length}개 더 골라 주세요`}</button></div></div>`;
 }
@@ -974,6 +975,8 @@ function finishYear() {
   save!.game = next;
   persist();
   ui.report = report;
+  // v3.4.1 진급 심사가 있는 해는 발표부터 (평정 통지서 · 약장 · 동기 소식이 결과를 먼저 알려 주지 않게)
+  if (report.promotion) { ui.promoOpen = false; ui.promoFirst = true; go('promotion'); return; }
   go('result');
 }
 
@@ -1503,7 +1506,6 @@ function nextInQueue() {
 function buildQueue(r: YearReport, g: GameState): Screen[] {
   const q: Screen[] = [];
   if (ui.medals.length) q.push('medal');
-  if (r.promotion) { q.push('promotion'); ui.promoOpen = false; }
   if (g.ended) { q.push('ending'); return q; }
   if (r.promotedTo) q.push('promo-ceremony');
   q.push('home');
@@ -1957,7 +1959,10 @@ root.addEventListener('click', (e) => {
       break;
     }
     case 'result-ok': ui.queue = buildQueue(ui.report!, save!.game); nextInQueue(); break;
-    case 'queue-next': clearInterval(typerId); nextInQueue(); break;
+    case 'queue-next':
+      clearInterval(typerId);
+      if (ui.screen === 'promotion' && ui.promoFirst) { ui.promoFirst = false; go('result'); break; }
+      nextInQueue(); break;
 
     // 인사
     case 'wish': {
