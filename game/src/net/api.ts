@@ -263,6 +263,11 @@ export async function createTeam(t: TeamInput): Promise<CohortRow> {
 }
 export const updateTeam = (id: string, t: Partial<TeamInput>) => rest(`cohorts?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ ...t, motto: t.motto === undefined ? undefined : t.motto || null }) }, true);
 export const joinTeam = (cohortId: string) => rest('members', { method: 'POST', body: JSON.stringify({ cohort_id: cohortId }) }, true);
+/** v3.3.9 기수장이 동기 내보내기 (서버 SQL 2026-11-16_v3.3.9.sql 필요: 없으면 아무 줄도 안 지워져서 알려 줌) */
+export async function kickMember(cohortId: string, userId: string): Promise<void> {
+  const rows = await rest<unknown[]>(`members?cohort_id=eq.${cohortId}&user_id=eq.${userId}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } }, true);
+  if (!rows.length) throw new Error('내보내지 못했어요 · 서버 설정(SQL)이 아직이에요');
+}
 export const leaveTeam = async (cohortId: string) => rest(`members?cohort_id=eq.${cohortId}&user_id=eq.${(await session()).user_id}`, { method: 'DELETE' }, true);
 export interface MemberRow { cohort_id: string; user_id: string; seq: number; joined_at: string }
 export interface MyTeam extends MemberRow { cohorts: CohortRow }

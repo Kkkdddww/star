@@ -7,8 +7,16 @@ import type { Officer, PromotionResult, Rank } from './types';
 
 export interface ScoredCandidate { o: Officer; score: number; breakdown: PromotionResult['breakdown'] }
 
+/** v3.3.9: 장성은 최소 연차(2년) = 보직 임기(2년)라 한 계급에 보직이 하나뿐 → 지휘·요직 한 곳이면 만점, 보조 보직만이면 75 */
+export const isGeneral = (o: Officer) => RANKS.indexOf(o.rank) >= RANKS.indexOf('준장');
 export function careerScore(o: Officer): number {
+  if (isGeneral(o)) return o.rankLog.core ? 100 : o.rankLog.support.length ? 75 : CAREER.base;
   return CAREER.base + (o.rankLog.core ? CAREER.core : 0) + CAREER.support * Math.min(CAREER.supportMax, o.rankLog.support.length) + ORIGIN[o.origin].careerBonus;
+}
+/** 경력 점수 설명 한 줄 (화면용) */
+export function careerLine(o: Officer): string {
+  if (isGeneral(o)) return `장성은 지휘·요직 한 곳이면 만점 · ${o.rankLog.core ? '완료' : o.rankLog.support.length ? '보조 보직만 (75)' : '아직 없음'}`;
+  return `55 + 핵심 ${o.rankLog.core ? 25 : 0} + 보조 ${Math.min(2, o.rankLog.support.length) * 10}${o.origin === '육사' ? ' + 출신 3' : ''}`;
 }
 
 /** 공적: 최근 4년 동안 받은 표창·큰 표창·무사고 지휘·임기 목표 (v3.3.4). 평정처럼 최근 4년만 봐서 계급에 머문 기간과 상관없다 */
@@ -59,7 +67,7 @@ export function weakest(o: Officer): { label: string; why: string } {
   const sup = Math.min(CAREER.supportMax, o.rankLog.support.length);
   const loss = [
     { label: '평정', v: gap(b.eval, AIM.eval, w.eval), why: '최근 4년 근무평정 평균이 낮았어요. 결재에서 확실한 선택을 늘려 보세요' },
-    { label: '경력', v: gap(b.career, AIM.career, w.career), why: !o.rankLog.core ? `지휘·요직 경험이 없었어요. 하면 경력 +${CAREER.core}, 희망 조사에서 1지망으로 노려 보세요` : `보조 보직을 ${sup}개만 거쳤어요. 하나 더 하면 경력 +${CAREER.support}` },
+    { label: '경력', v: gap(b.career, AIM.career, w.career), why: isGeneral(o) ? '장성은 이 계급에서 지휘·요직을 한 곳 맡아야 경력 만점이에요. 희망 조사에서 1지망으로 노려 보세요' : !o.rankLog.core ? `지휘·요직 경험이 없었어요. 하면 경력 +${CAREER.core}, 희망 조사에서 1지망으로 노려 보세요` : `보조 보직을 ${sup}개만 거쳤어요. 하나 더 하면 경력 +${CAREER.support}` },
     { label: '공적', v: gap(b.merit ?? 0, AIM.merit, w.merit), why: '최근 4년 표창·무사고 지휘가 적었어요. 표창 1개 +5, 지휘 보직 무사고 1년 +3' },
     { label: '교육', v: gap(b.edu, AIM.edu, w.edu), why: '군사교육 석차가 아쉬웠어요. 전문성이 석차를 좌우해요' },
     { label: '전투', v: gap(b.combat, AIM.combat, w.combat), why: '작전·전술이 계급 평균보다 낮았어요' },
@@ -95,7 +103,9 @@ export const REVIEW_POOL = 10;
 // v3.2: 잠재력 B안(B·C 성장↑)으로 전체 능력치가 올라서 +1 (봇 기준 대령+·준장+ 비율을 v3.1과 같게)
 // v3.3.4: 공적 15%(평균 60대라 전체 점수 −2쯤) + 잠재력 격차 축소(성장↑)를 반영해 다시 맞춤. 봇 대령+ · 준장+는 v3.3과 같게,
 //         장성 단계는 공식 변화(−2.4)만큼 내리고, 중장은 대장 비율을 올리려고 1.5 더 내림
-const VIRTUAL_MEAN: Partial<Record<Rank, number>> = { 중령: 77, 대령: 75.8, 준장: 73.9, 소장: 74.6, 중장: 73.1 };
+// v3.3.9: 실제 기록 준장+ 17%(목표 8%) → 대령 +1.3. 장성 경력 만점 규칙으로 장성 점수가 약 +6 → 준장 · 소장 +6, 중장은 대장 비율을 올리려고 +4만
+// v3.4: 병과 9개 · 보직 80여 개로 핵심 경력 · 궁합이 흔해져서 중령 · 대령을 올림. 목표(사람) 준장+ 15% · 중장+ 1% · 대장 0.5% → 봇 mix best 준장+ 약 2.6%
+const VIRTUAL_MEAN: Partial<Record<Rank, number>> = { 중령: 85, 대령: 77, 준장: 79.9, 소장: 80.6, 중장: 77.1 };
 
 export function runReview(rank: Rank, officers: Officer[], rng: Rng): ReviewOutcome | null {
   if (!PROMOTION[rank]) return null;

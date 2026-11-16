@@ -1,3 +1,4 @@
+import { UNIT_TYPES } from '../data/billets';
 // 인사 v3: 부대 상황 카드 + 상관 유형 + 임기 목표.
 // 카드는 희망 조사 때 보이고(세상 시드), 상관은 인사 발표 때 공개된다(판정 주사위).
 import { createRng, type Rng } from './rng';
@@ -81,14 +82,15 @@ export function startTerm(o: Officer, unit: UnitTrait, boss: BossType, year: num
 /** 업무 성과 점수에 부대·상관 효과 */
 export function termWork(o: Officer, base: number, rng: Rng): number {
   const t = o.term;
-  if (!t) return base + rng.int(-10, 10);
+  const ut = o.utype ? UNIT_TYPES[o.utype] : null;
+  if (!t) return base + rng.int(-Math.round(10 * (ut?.swing ?? 1)), Math.round(10 * (ut?.swing ?? 1))) + (ut?.work ?? 0);
   const u = UNITS[t.unit], b = BOSSES[t.boss];
-  const swing = b.swing !== undefined ? Math.max(b.swing, u.swing - 4) : u.swing;
-  let s = base + rng.int(-swing, swing) + u.work;
+  const swing = Math.round((b.swing !== undefined ? Math.max(b.swing, u.swing - 4) : u.swing) * (ut?.swing ?? 1));
+  let s = base + rng.int(-swing, swing) + u.work + (ut?.work ?? 0);
   if (b.amp) s = 60 + (s - 60) * b.amp;
   if (b.floor) s = Math.max(b.floor, s);
   return Math.round(s);
 }
-export const termGrowth = (o: Officer) => (o.term ? UNITS[o.term.unit].growth * (BOSSES[o.term.boss].growth ?? 1) : 1);
-export const termEventMult = (o: Officer, slot: 'bad' | 'good') => (o.term ? UNITS[o.term.unit][slot] : 1);
+export const termGrowth = (o: Officer) => (o.term ? UNITS[o.term.unit].growth * (BOSSES[o.term.boss].growth ?? 1) : 1) * (o.utype ? UNIT_TYPES[o.utype].growth : 1);
+export const termEventMult = (o: Officer, slot: 'bad' | 'good') => (o.term ? UNITS[o.term.unit][slot] : 1) * (o.utype ? UNIT_TYPES[o.utype][slot] : 1);
 export const bossStyleBonus = (o: Officer, style: Style) => (o.term ? BOSSES[o.term.boss].styles[style] ?? 0 : 0);

@@ -7,7 +7,8 @@ import { RANKS } from '../src/data/config';
 import { POT_ROLL } from '../src/engine/candidates';
 import { optionOdds, rewardTier } from '../src/engine/choice';
 import { advanceYear, decide, newGame, setPolicy, submitWishes } from '../src/engine/game';
-import { assignmentsFor, isRequired, lacksRequired, wishScore } from '../src/engine/personnel';
+import { isRequired, lacksRequired, openFor, wishScore } from '../src/engine/personnel';
+import { CORPS, CORPS_BRANCH, type Corps } from '../src/data/billets';
 import type { Branch, Path, Potential } from '../src/engine/types';
 declare const process: { argv: string[]; env: Record<string, string> };
 const N = Number(process.argv[2] ?? 1000), POT = process.argv[3] ?? 'mix', BOT = process.argv[4] ?? 'best', OFF = Number(process.env.OFF ?? 0);
@@ -18,11 +19,12 @@ for (let j = 0; j < N; j++) {
   let x = (i * 2654435761 + 97) >>> 0; const R = () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296);
   const smart = () => BOT === 'best' || (BOT === 'mid' && R() < 0.5);
   const pot: Potential = POT === 'mix' ? POT_ROLL(R()) : (POT as Potential);
-  let s = newGame({ name: '봇', origin: '학군', branch: BR[i % 3], path: PA[Math.floor(i / 3) % 3], potential: pot, seed: 5000 + i, schoolPct: 20 + Math.floor(R() * 60), bonus: {} });
+  const corps: Corps = (process.env.CORPS as Corps) || (process.env.BRANCH ? CORPS.filter((c) => CORPS_BRANCH[c] === process.env.BRANCH)[i % CORPS.filter((c) => CORPS_BRANCH[c] === process.env.BRANCH).length] : CORPS[i % 9]);
+  let s = newGame({ name: '봇', origin: '학군', corps, branch: CORPS_BRANCH[corps], path: PA[Math.floor(i / 3) % 3], potential: pot, seed: 5000 + i, schoolPct: 20 + Math.floor(R() * 60), bonus: {} });
   let g = 0;
   while (!s.ended && g++ < 60) {
     if (s.personnelDue) { const me = s.me; const pri = (a: any) => (lacksRequired(me) && isRequired(me, a.id) ? 3 : a.kind === '지휘' || a.kind === '요직' ? 1 : 0); const sm = smart();
-      const o = assignmentsFor(me.rank).sort((a, b) => sm ? pri(b) - pri(a) || wishScore(me, b) - wishScore(me, a) : R() - 0.5); s = submitWishes(s, [o[0].id, o[1].id]); continue; }
+      const o = openFor(me).sort((a, b) => sm ? pri(b) - pri(a) || wishScore(me, b) - wishScore(me, a) : R() - 0.5); s = submitWishes(s, [o[0].id, o[1].id]); continue; }
     if (s.policyDue) { s = setPolicy(s, '장병 우선'); continue; }
     for (let k = 0; s.desk && k < s.desk.items.length; k++) { const def = CHOICE_BY_ID[s.desk.items[k].defId];
       const ev = (o: any) => { const pp = optionOdds(s.me, o).p; return pp / 100 * Math.round(o.success.eval * (o.success.eval > 0 ? rewardTier(pp, o.sure).mult : 1)) + (1 - pp / 100) * o.fail.eval - (o.style === '편법' ? 2 : 0); };

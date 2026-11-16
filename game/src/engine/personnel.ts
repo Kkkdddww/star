@@ -3,9 +3,19 @@
 import { ASSIGNMENT_TERM, ASSIGNMENTS, FIXED_QUOTA, PERSONALITY, QUOTA, RANKS, REQUIRED_BILLET, REQUIRED_WISH_BONUS, SOFT_CAP, VIRTUAL_SENIORS, WISH_WEIGHTS } from '../data/config';
 import type { Rng } from './rng';
 import type { Assignment, Officer, PersonnelResult, Rank } from './types';
+import { billetOpen, DEFAULT_CORPS, type Corps, type UnitType } from '../data/billets';
 import { keyRng, termOff, rollBoss, startTerm, UNIT_KEYS, unitCard, UNITS } from './term';
 
-export const assignmentsFor = (rank: Rank) => ASSIGNMENTS.filter((a) => a.ranks.includes(rank));
+/** 이 계급의 보직. corps를 주면 그 병과가 갈 수 있는 것만 (v3.4) */
+export const assignmentsFor = (rank: Rank, corps?: Corps) => ASSIGNMENTS.filter((a) => a.ranks.includes(rank) && (!corps || billetOpen(a, corps)));
+/** 병과 (옛 저장은 계열에서) */
+export const corpsOf = (o: Officer): Corps => o.corps ?? DEFAULT_CORPS[o.branch];
+export const openFor = (o: Officer) => assignmentsFor(o.rank, corpsOf(o));
+/** 이 자리의 부대 종류: 후보가 하나면 그것, 여럿이면 세상 시드로 (나와 동기가 다름) */
+export function utypeOf(seed: number, year: number, a: Assignment, who: string): UnitType {
+  const us = (a.units ?? ['후방']) as UnitType[];
+  return us.length === 1 ? us[0] : keyRng(seed, year, a.id, who, 'ut').pick(us);
+}
 export const asg = (id: string) => ASSIGNMENTS.find((a) => a.id === id)!;
 export const isGeneral = (rank: Rank) => RANKS.indexOf(rank) >= RANKS.indexOf('준장');
 
@@ -36,6 +46,9 @@ export function wishScore(o: Officer, a: Assignment): number {
   return Math.round((ev * WISH_WEIGHTS.eval + stat * WISH_WEIGHTS.stat + o.stats.social * WISH_WEIGHTS.social + tags * WISH_WEIGHTS.tag + req - risk) * 10) / 10;
 }
 
+/** v3.4 정원 묶음: 병과 전용 자리(보병 중대장 · 포대장 · 통신 중대장 …)는 같은 계급 · 같은 종류끼리 한 묶음으로 정원을 나눠 쓴다
+ *  (병과마다 따로 세면 지원자 1~2명이라 정원이 0이나 1로 튀어서 병과 사이 차이가 너무 커짐) */
+export const poolKey = (a: Assignment) => (a.corps ? `pool:${a.kind}:${a.ranks[0]}` : a.id);
 /** 정원: null이면 제한 없음 */
 export function quotaOf(a: Assignment, applicants: number, card?: keyof typeof UNITS): number | null {
   if (a.id in FIXED_QUOTA) return FIXED_QUOTA[a.id];
@@ -43,7 +56,7 @@ export function quotaOf(a: Assignment, applicants: number, card?: keyof typeof U
   if (r === null) return null;
   const q = card ? UNITS[card].quota : undefined;
   if (q === 'open') return null;
-  const sameKind = assignmentsFor(a.ranks[0]).filter((x) => x.kind === a.kind).length;
+  const sameKind = new Set(assignmentsFor(a.ranks[0]).filter((x) => x.kind === a.kind).map(poolKey)).size || 1;
   const n = Math.max(1, Math.round((r / sameKind) * applicants));
   return q === 'tight' ? Math.max(1, Math.round(n * 0.6)) : n;
 }
@@ -57,8 +70,8 @@ export function quotaLabel(a: Assignment, card?: keyof typeof UNITS): string {
 }
 
 export function npcWishes(o: Officer, rng: Rng): [string, string] {
-  const opts = assignmentsFor(o.rank).filter((a) => a.id !== o.assignmentId);
-  const all = opts.length ? opts : assignmentsFor(o.rank);
+  const opts = openFor(o).filter((a) => a.id !== o.assignmentId);
+  const all = opts.length ? opts : openFor(o);
   const [k1, k2] = PERSONALITY[o.personality].wish;
   const byKind = (k: string) => all.filter((a) => a.kind === k);
   const req = lacksRequired(o) ? all.filter((a) => isRequired(o, a.id)) : [];
@@ -100,14 +113,14 @@ export function runPersonnel(everyone: Officer[], myWishes: [string, string] | n
       }
     }
     const total = cands.length;
-    const left = new Map(billets.map((b) => [b.id, quotaOf(b, total, cardOf(seed, year, b.id, rank))]));
+    const left = new Map(billets.map((b) => [poolKey(b), quotaOf(b, total, cardOf(seed, year, b.id, rank))]));
     const applicants = new Map(billets.map((b) => [b.id, cands.filter((c) => c.wishes[0] === b.id).length]));
     cands.sort((a, b) => b.score - a.score || rng.next() - 0.5);
     for (const c of cands) {
       let got: string | null = null;
       let wishRank: 0 | 1 | 2 = 0;
       if (c.o && mustAssign(c.o)) {
-        const forced = billets.find((b) => isRequired(c.o!, b.id))!;
+        const forced = openFor(c.o).find((b) => isRequired(c.o!, b.id)) ?? billets.find((b) => isRequired(c.o!, b.id))!;
         got = forced.id;
         wishRank = c.wishes[0] === got ? 1 : c.wishes[1] === got ? 2 : 0;
         if (c.o.id === 'me') mine = { year, rank, from: c.o.assignmentId, wishes: c.wishes, got, wishRank, myScore: wishScore(c.o, forced), quota: null, applicants: applicants.get(got) ?? 0, note: `필수 보직(${forced.name})을 아직 안 해서 인사과가 우선 배정했어요` };
@@ -116,17 +129,18 @@ export function runPersonnel(everyone: Officer[], myWishes: [string, string] | n
         continue;
       }
       for (const [i, w] of c.wishes.entries()) {
-        const q = left.get(w);
+        const q = left.get(poolKey(asg(w)));
         if (q === null || (q !== undefined && q > 0)) { got = w; wishRank = (i + 1) as 1 | 2; break; }
       }
       if (!got) {
-        const open = billets.filter((b) => left.get(b.id) === null);
-        const pool = open.length ? open : billets;
+        const mine2 = c.o ? billets.filter((b) => billetOpen(b, corpsOf(c.o!))) : billets;
+        const open = mine2.filter((b) => left.get(poolKey(b)) === null);
+        const pool = open.length ? open : mine2;
         const self = c.o;
         got = (self ? pool.sort((x, y) => wishScore(self, y) - wishScore(self, x))[0] : rng.pick(pool)).id;
       }
-      const q = left.get(got);
-      if (q !== null && q !== undefined) left.set(got, q - 1);
+      const q = left.get(poolKey(asg(got)));
+      if (q !== null && q !== undefined) left.set(poolKey(asg(got)), q - 1);
       if (!c.o) continue;
       if (c.o.id === 'me') {
         const a = asg(got);
@@ -148,25 +162,26 @@ export function place(o: Officer, id: string, year: number, rng: Rng, seed: numb
   o.assignmentId = id;
   o.yearsInAssignment = 0;
   if (!o.billets.includes(id)) o.billets.push(id);
+  o.utype = utypeOf(seed, year, asg(id), o.id);
   const unit = o.id === 'me' ? unitCard(seed, year, id) : rng.pick(UNIT_KEYS);
   startTerm(o, unit, rollBoss(unit, rng), year);
 }
 
-export interface WishInfo { id: string; card?: keyof typeof UNITS; quota: number | null; rivals: number; ahead: number; chance: '안정' | '경합' | '어려움' | null }
+export interface WishInfo { utype: UnitType; id: string; card?: keyof typeof UNITS; quota: number | null; rivals: number; ahead: number; chance: '안정' | '경합' | '어려움' | null }
 /** 희망 조사 미리보기: 자리별 부대 카드, 정원, 1지망으로 올 동기 수, 그중 나보다 점수가 높은 사람 */
 export function wishPreview(me: Officer, cohort: Officer[], year: number, seed: number): WishInfo[] {
   const rank = me.rank;
-  const billets = assignmentsFor(rank);
+  const billets = openFor(me);
   const group = cohort.filter((o) => needsReassign(o) && o.rank === rank);
   const wishes = group.map((o) => ({ o, w: npcWishesFor(o, seed, year)[0] }));
-  const total = group.length + 1 + (isGeneral(rank) ? VIRTUAL_SENIORS : 0);
   return billets.map((b) => {
+    const total = group.length + 1 + (isGeneral(rank) ? VIRTUAL_SENIORS : 0);
     const card = cardOf(seed, year, b.id, rank);
     const quota = quotaOf(b, total, card);
     const mine = wishScore(me, b);
-    const rivals = wishes.filter((x) => x.w === b.id);
+    const rivals = wishes.filter((x) => poolKey(asg(x.w)) === poolKey(b));
     const ahead = rivals.filter((x) => wishScore(x.o, b) > mine).length;
     const chance = quota === null || isGeneral(rank) ? null : ahead < quota * 0.6 ? '안정' : ahead < quota ? '경합' : '어려움';
-    return { id: b.id, card, quota, rivals: rivals.length, ahead, chance };
+    return { id: b.id, card, quota, rivals: rivals.length, ahead, chance, utype: utypeOf(seed, year, b, 'me') };
   });
 }

@@ -1,3 +1,4 @@
+import { CORPS, CORPS_BRANCH, CORPS_DESC, UNIT_TYPES, corpsOfO, type Corps } from '../data/billets';
 // 화면 (v2): 흰 바탕 + 국방색 포인트, 군 행정 문서를 모티프로 한 UI.
 // 학교 프롤로그 → 임관 → (결재함 → 1년 → 근무평정 통지서 → 진급·인사) 반복 → 전역 카드
 import { CHOICE_BY_ID } from '../data/choices';
@@ -11,10 +12,10 @@ import { initAnalytics, track } from '../net/analytics';
 import { hobongOf, runXp } from '../engine/hobong';
 import { CONTEST_FROM, CONTEST_POT, contestOpen, MAX_TEAMS, weekNo, weekOf } from '../engine/contest';
 import { baseStats, fixedPotential, makeCandidates, DIFFICULTY, potentialRange, type Candidate } from '../engine/candidates';
-import { asg, assignmentsFor, isRequired, lacksRequired, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
+import { asg, assignmentsFor, isRequired, lacksRequired, openFor, quotaLabel, wishPreview, wishScore } from '../engine/personnel';
 import { BOSSES, goalOf, keyRng, UNITS } from '../engine/term';
 import { RANK_BASELINE, REQUIRED_BILLET } from '../data/config';
-import { careerScore, meritLine, promotionBreakdown, weakestStats } from '../engine/promotion';
+import { careerLine, careerScore, meritLine, promotionBreakdown, weakestStats } from '../engine/promotion';
 import { graduate, rollOrigin, SCHOOL_MOMENTS, type Graduation } from '../engine/school';
 import { eul, eunNeun, hasJong, iga, ro } from '../engine/text';
 import { STAT_KEYS, STAT_LABEL, type Branch, type DeskResult, type Outcome, type GameState, type Origin, type Path, type Policy, type Potential, type Rank, type SchoolFocus, type StatKey, type Stats, type YearReport } from '../engine/types';
@@ -29,7 +30,7 @@ import { cardHtml, dailyResult, invalidate, invalidateDaily, lastCard, load, rk,
 import { loginState } from './login';
 import { forgetPeople, contestAfter, contestDoc, contestTileSub, cs, myTeamsNow, mineL } from './contest';
 import { randomRibbon, teamRibbon } from './teamRibbon';
-import { AlreadyError, hideGuest, replyGuest, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
+import { AlreadyError, kickMember, hideGuest, replyGuest, myStatsCached, unstash, consumeAuthReturn, deleteAccount, linkProvider, loginInfo, logout, myId, signInProvider, statsOf, type Provider, createCohort, createTeam, dailyCount, dailyRanking, getCohort, getProfile, joinTeam, leaveTeam, memberCounts, nicknameProblem, publicTeams, reportGuest, saveProfile, saveRun, seasonRanking, setMainTeam, textProblem, today, updateTeam, writeGuest, type RunRow } from '../net/api';
 
 // ───────── 저장 ─────────
 interface Save { game: GameState; focus: [StatKey, StatKey]; potentialSeen: string | null; metaApplied: boolean; log?: unknown[]; runId?: string | null; tpSeen?: string[]; tpLast?: number }
@@ -98,7 +99,7 @@ type Sheet = null | 'focus' | 'retire' | 'reset' | 'ad' | 'title' | 'post';
 
 interface Prologue {
   name: string; origin: Origin; potential: Potential; seed: number;
-  focus: SchoolFocus[]; branch: Branch; open: boolean; chosen: boolean;
+  focus: SchoolFocus[]; branch: Branch; corps: Corps; open: boolean; chosen: boolean;
   grad: Graduation | null;
   /** 후보 3명 · 고른 후보 · 다시 뽑기 사용 수 · 잠재력 범위(본 경우) */
   cands: Candidate[]; pick: number | null; rerolls: number; viewed: boolean; ranges: string[] | null;
@@ -181,7 +182,7 @@ function newPrologue(daily?: string, group?: Prologue['group'], week?: string): 
   const cands = makeCandidates(rand);
   const fixedPot = daily ? fixedPotential(daily) : group?.day ? fixedPotential(group.day) : week ? CONTEST_POT : null;
   if (fixedPot) for (const c of cands) c.potential = fixedPot;
-  return { name: '', origin: '학군', potential: 'B', seed: 0, focus: [], branch: '전투', open: false, chosen: false, grad: null,
+  return { name: '', origin: '학군', potential: 'B', seed: 0, focus: [], branch: '전투', corps: '보병', open: false, chosen: false, grad: null,
     cands, pick: null, rerolls: 0, viewed: false, ranges: null, spread: {}, range: null, daily, group, week, fixedPot };
 }
 const fixedWorld = (p: Prologue) => !!(p.daily || p.group || p.week);
@@ -423,7 +424,7 @@ function viewFocus(): string {
     <p class="sub">2개를 골라 주세요. 졸업 석차와 첫 능력치가 달라져요.</p>
     <div class="pick" style="margin-top:14px">${(Object.keys(SCHOOL_FOCUS) as SchoolFocus[]).map((f) => `<button class="pk ${p.focus.includes(f) ? 'on' : ''}" data-act="p-focus" data-v="${f}"><b>${f}</b><span>${SCHOOL_FOCUS[f].desc}</span></button>`).join('')}</div>
     <p class="lbl">희망 병과</p>
-    <div class="pick three">${(['전투', '기술', '행정'] as Branch[]).map((b) => `<button class="pk ${p.branch === b ? 'on' : ''}" data-act="p-branch" data-v="${b}"><b>${b}</b><span>${b === '전투' ? '지휘 보직과 궁합' : b === '기술' ? '전문성 보직과 궁합' : '행정력 보직과 궁합'}</span></button>`).join('')}</div>
+    ${(['전투', '기술', '행정'] as Branch[]).map((b) => `<p class="faint" style="margin:10px 2px 6px">${b} 계열</p><div class="pick three">${CORPS.filter((c) => CORPS_BRANCH[c] === b).map((c) => `<button class="pk ${p.corps === c ? 'on' : ''}" data-act="p-corps" data-v="${c}"><b>${c}</b><span>${CORPS_DESC[c]}</span></button>`).join('')}</div>`).join('')}
     <p class="faint">석차가 낮으면 희망 병과가 안 될 수도 있어요</p>
   </div>
   <div class="bar"><button class="btn" data-act="p-study" ${ok ? '' : 'disabled'}>${ok ? '생도 생활 시작' : `${2 - p.focus.length}개 더 골라 주세요`}</button></div></div>`;
@@ -443,7 +444,7 @@ function viewSchool(): string {
 
 function prologueGraduate() {
   const p = ui.pro!;
-  p.grad = graduate({ focus: [p.focus[0], p.focus[1]], branchWish: p.branch, potential: p.potential, seed: p.seed });
+  p.grad = graduate({ focus: [p.focus[0], p.focus[1]], branchWish: CORPS_BRANCH[p.corps], corpsWish: p.corps, potential: p.potential, seed: p.seed });
 }
 
 function viewGrad(): string {
@@ -459,7 +460,7 @@ function viewGrad(): string {
       <div class="meta">
         <div class="kv"><span>졸업 석차</span><b>상위 ${g.pct}%</b></div>
         <div class="kv"><span>평가</span><b>${g.label}</b></div>
-        <div class="kv"><span>병과 배정</span><b>${g.branch}${g.branchGranted ? ' <span class="chip">희망 반영</span>' : ' <span class="chip amber">희망과 다름</span>'}</b></div>
+        <div class="kv"><span>병과 배정</span><b>${g.corps ?? g.branch}${g.branchGranted ? ' <span class="chip">희망 반영</span>' : ' <span class="chip amber">희망과 다름</span>'}</b></div>
       </div>
       <p class="faint">생도 시절에 오른 능력치</p>
       <div class="chips" style="margin-top:6px">${bonus}</div>
@@ -492,7 +493,7 @@ function startGame(preview = false): GameState {
   const name = p.name.trim() || '김OO';
   const bonus: Partial<Stats> = { ...g.bonus };
   for (const [k, v] of Object.entries(p.spread)) bonus[k as StatKey] = (bonus[k as StatKey] ?? 0) + v!;
-  return newGame({ name, origin: p.origin, branch: g.branch, path: pathFromFocus(p.focus), potential: p.potential, seed: p.seed, schoolPct: g.pct, bonus, year: preview ? 2027 : undefined, creation: { rerolls: p.rerolls, viewed: p.viewed }, world: fixedWorld(p) ? { mode: p.daily ? 'daily' : p.week ? 'contest' : 'cohort', day: p.daily, week: p.week, group: p.group ? { id: p.group.id, code: p.group.code, name: p.group.name } : undefined, rollSeed: preview ? 1 : Math.floor(Math.random() * 1e9) } : undefined });
+  return newGame({ name, origin: p.origin, branch: g.branch, corps: g.corps, path: pathFromFocus(p.focus), potential: p.potential, seed: p.seed, schoolPct: g.pct, bonus, year: preview ? 2027 : undefined, creation: { rerolls: p.rerolls, viewed: p.viewed }, world: fixedWorld(p) ? { mode: p.daily ? 'daily' : p.week ? 'contest' : 'cohort', day: p.daily, week: p.week, group: p.group ? { id: p.group.id, code: p.group.code, name: p.group.name } : undefined, rollSeed: preview ? 1 : Math.floor(Math.random() * 1e9) } : undefined });
 }
 
 function viewCommission(): string {
@@ -505,7 +506,7 @@ function viewCommission(): string {
     <div class="stage"><div class="glow"></div><div class="new">${insignia('소위', 104)}</div></div>
     <h1 class="h1 rise d1">대한민국 육군<br><span class="olive">소위</span> ${esc(me.name)}</h1>
     <div class="speech rise d2"><p class="faint">임관 신고</p><p>${esc(speech)}</p></div>
-    <p class="flavor rise d3">${me.origin} 출신 · ${me.branch} 병과 · 졸업 석차 상위 ${me.schoolPct}%</p>
+    <p class="flavor rise d3">${me.origin} 출신 · ${corpsOfO(me)} 병과 · 졸업 석차 상위 ${me.schoolPct}%</p>
   </div>
   <div class="bar"><button class="btn" data-act="p-done">첫 부대로</button></div></div>`;
 }
@@ -521,7 +522,7 @@ function serviceCard(g: GameState): string {
   const pos = [me, ...g.cohort].filter((o) => o.active).sort((x, y) => rankCount(y.rank) - rankCount(x.rank) || overall(y.stats, y.path) - overall(x.stats, x.path)).indexOf(me) + 1;
   return `
   <section class="doc">
-    <div class="hd"><span>복무 카드</span><em>${me.origin} · ${me.branch} · 복무 ${careerYear(g)}년차</em></div>
+    <div class="hd"><span>복무 카드</span><em>${me.origin} · ${corpsOfO(me)} · 복무 ${careerYear(g)}년차</em></div>
     <div class="bd">
       <div class="svc">
         <div class="badge">${insignia(me.rank, 78)}</div>
@@ -624,9 +625,10 @@ function postSheet(g: GameState): string {
   const a = asg(me.assignmentId);
   return `<h3 class="h2">${a.name}</h3><p class="sub">${a.kind} · 임기 2년 중 ${me.yearsInAssignment + 1}년차</p>
     <div class="kvs">
+      ${me.utype ? `<div class="kv"><span>부대</span><b>${UNIT_TYPES[me.utype].name}</b></div>` : ''}
       <div class="kv"><span>잘 오르는 능력치</span><b>${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}</b></div>
       <div class="kv"><span>경력 가치</span><b>${a.kind === '지휘' || a.kind === '요직' ? '<span class="olive">핵심 경력</span>' : '보조 경력'}</b></div>
-      <div class="kv"><span>병과 궁합</span><b>${branchFits(me.branch, a) ? '<span class="olive">잘 맞아요 · 성장 +20%</span>' : '보통'}</b></div>
+      <div class="kv"><span>병과 궁합</span><b>${branchFits(me, a) ? '<span class="olive">잘 맞아요 · 성장 +20%</span>' : '보통'}</b></div>
       ${me.policy ? `<div class="kv"><span>지휘 방침</span><b>${me.policy}</b></div>` : ''}
       ${me.term ? `<div class="kv"><span>부대 · 상관</span><b>${UNITS[me.term.unit].short} · ${BOSSES[me.term.boss].name}</b></div>` : ''}
     </div>
@@ -680,7 +682,7 @@ function viewRecord(g: GameState): string {
     <div class="hd"><span>지금 심사를 받는다면</span><em>${RANKS[rankCount(me.rank) + 1]} 진급</em></div>
     <div class="bd">
       ${REQUIRED_BILLET[me.rank] ? `<div class="kv" style="margin-bottom:14px"><span>필수 보직</span><b>${REQUIRED_BILLET[me.rank]!.label} ${lacksRequired(me) ? '<span class="chip red">아직 안 함</span>' : '<span class="chip on">완료</span>'}</b></div>` : ''}
-      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, `55 + 핵심 ${me.rankLog.core ? 25 : 0} + 보조 ${Math.min(2, me.rankLog.support.length) * 10}${me.origin === '육사' ? ' + 출신 3' : ''}`], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
+      ${([['평정', pr.weights.eval, b.eval, '현재 계급 최근 4년 평균'], ['경력', pr.weights.career, b.career, careerLine(me)], ['공적', pr.weights.merit, b.merit ?? 0, meritLine(me)], ['교육', pr.weights.edu, b.edu, '최근 군사교육 석차'], ['전투', pr.weights.combat, b.combat, '작전·전술'], ['균형', pr.weights.balance, b.balance, `가장 낮은 두 능력치(${weakestStats(me)})`]] as [string, number, number, string][])
         .filter((x) => x[1] > 0).map(([l, w, v, d]) => `<div class="stat"><div class="kv"><span>${l} <span class="faint">${Math.round(w * 100)}%</span></span><b>${Math.round(v)}</b></div><div class="track light"><div style="width:${v}%"></div></div><p class="faint" style="margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</p></div>`).join('')}
     </div>
   </section>` : ''}
@@ -1018,7 +1020,7 @@ function viewPromoCeremony(g: GameState, r: YearReport): string {
 const CHANCE_CLS = { 안정: 'on', 경합: 'amber', 어려움: 'red' } as const;
 function viewWish(g: GameState): string {
   const me = g.me;
-  const opts = assignmentsFor(me.rank);
+  const opts = openFor(me);
   const info = new Map(wishPreview(me, g.cohort, g.year, g.seed).map((x) => [x.id, x]));
   const label = (id: string) => (ui.wish[0] === id ? '1지망' : ui.wish[1] === id ? '2지망' : '');
   const ok = ui.wish.length === 2;
@@ -1032,7 +1034,7 @@ function viewWish(g: GameState): string {
     <div style="margin-top:10px">
     ${opts.map((a) => {
       const l = label(a.id);
-      const fit = branchFits(me.branch, a);
+      const fit = branchFits(me, a);
       const core = a.kind === '지휘' || a.kind === '요직';
       const w = info.get(a.id)!;
       const u = w.card ? UNITS[w.card] : null;
@@ -1040,8 +1042,9 @@ function viewWish(g: GameState): string {
       // v3.4: 카드 한 장 = 이름 줄 + 요약 한 줄 + 경쟁 한 줄. 부대 설명은 고른 자리만
       return `<button class="opt ${l ? 'on' : ''}" data-act="wish" data-v="${a.id}">
         <div class="top2">${l ? `<span class="chip on">${l}</span>` : `<span class="chip gray">${a.kind}</span>`}<b>${a.name}</b>${w.chance ? `<span class="chip ${CHANCE_CLS[w.chance]}">${w.chance}</span>` : `<span class="faint">${quotaLabel(a, w.card)}</span>`}</div>
-        <p class="d">${isRequired(me, a.id) && lacksRequired(me) ? '<b class="olive">필수 보직</b> · ' : ''}${core ? '<b class="olive">핵심 경력</b>' : '보조 경력'} · ${STAT_LABEL[a.grows[0]]}·${STAT_LABEL[a.grows[1]]}${fit ? ' · 궁합 +20%' : ''}${u ? ` · ${u.short}` : ''}</p>
-        ${l && u ? `<p class="d">${u.name} · ${u.desc}</p>` : ''}
+        <p class="d"><b style="color:var(--ink)">${UNIT_TYPES[w.utype].name}</b>${u ? ` · ${u.short}` : ''}</p>
+        <p class="d">${isRequired(me, a.id) && lacksRequired(me) ? '<b class="olive">필수 보직</b> · ' : ''}${core ? '<b class="olive">핵심 경력</b>' : '보조 경력'} · ${STAT_LABEL[a.grows[0]]}·${STAT_LABEL[a.grows[1]]}${fit ? ` · <b class="olive">${corpsOfO(me)} 궁합 +20%</b>` : ''}</p>
+        ${l ? `<p class="d">${UNIT_TYPES[w.utype].desc}${u ? ` · ${u.desc}` : ''}</p>` : ''}
         <p class="why">내 점수 ${wishScore(me, a)}${a.id === me.assignmentId ? ' · 지금 보직' : ''} · ${comp}</p>
       </button>`;
     }).join('')}
@@ -1089,6 +1092,7 @@ function viewOrder(g: GameState): string {
         <div class="kv"><span>계급</span><b>${p.rank}</b></div>
         <div class="kv"><span>현 보직</span><b>${p.from ? asg(p.from).name : '-'}</b></div>
         <div class="kv"><span>신 보직</span><b class="olive">${a.name}</b></div>
+        ${g.me.utype ? `<div class="kv"><span>소속</span><b>${UNIT_TYPES[g.me.utype].name}</b></div>` : ''}
         <div class="kv"><span>발령일</span><b>${g.year}. 1. 1.</b></div>
       </div>
       <p class="body">${p.note}.</p>
@@ -1128,7 +1132,7 @@ function viewAssignCeremony(g: GameState): string {
     <div class="speech"><p class="faint">전입 신고</p><p id="typer" data-text="${esc(speech)}"></p></div>
     <div class="doc" style="margin:14px 0 0"><div class="bd">
       <div class="kv"><span>보직</span><b>${a.kind} · ${a.kind === '지휘' || a.kind === '요직' ? '핵심 경력' : '보조 경력'}</b></div>
-      <div class="kv"><span>잘 오르는 능력치</span><b>${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}${branchFits(me.branch, a) ? ' <span class="olive">· +20%</span>' : ''}</b></div>
+      <div class="kv"><span>잘 오르는 능력치</span><b>${STAT_LABEL[a.grows[0]]}, ${STAT_LABEL[a.grows[1]]}${branchFits(me, a) ? ' <span class="olive">· +20%</span>' : ''}</b></div>
       ${me.policy ? `<div class="kv"><span>지휘 방침</span><b>${me.policy}</b></div>` : ''}
       ${ui.firstPost ? termRows(g) : ''}
     </div></div>
@@ -1279,6 +1283,7 @@ function viewEnding(g: GameState): string {
     ${ui.newRibbons.length ? `<p class="sec">도감에 새로 등록된 약장</p><div class="chips">${ui.newRibbons.map((n) => `<span class="chip">${n}</span>`).join('')}</div>` : ''}
     <p class="sec">숨겨져 있던 것</p>
     <div class="doc" style="margin:0"><div class="bd" style="padding-top:18px">
+      <div class="kv"><span>병과 · 많이 근무한 부대</span><b>${corpsOfO(me)}${Object.entries(me.service ?? {}).sort((x, y) => (y[1] ?? 0) - (x[1] ?? 0)).slice(0, 2).map(([k, v]) => ` · ${UNIT_TYPES[k as keyof typeof UNIT_TYPES].name.split(' (')[0]} ${v}년`).join('')}</b></div>
       <div class="kv"><span>잠재력</span><b class="olive">${me.hidden.potential}등급${me.awakenings ? ` (각성 ${me.awakenings}회)` : ''}</b></div>
       <div class="kv"><span>마음에 걸리는 일</span><b>${me.hidden.risk}건</b></div>
       <div class="kv"><span>중대 사건</span><b>${me.log.incidents}건 중 원칙대로 ${me.log.principled}건</b></div>
@@ -1314,7 +1319,7 @@ async function upload(g: GameState) {
     await saveProfile(nick, d.title);
     { const mt = myTeamsNow(); if (mt?.length) await ensureMainTeam(mt[0].cohort_id); }
     const id = await saveRun({
-      nickname: nick, origin: g.me.origin, branch: g.me.branch, final_rank: d.finalRank, rank_index: rankCount(d.finalRank),
+      nickname: nick, origin: g.me.origin, branch: corpsOfO(g.me), final_rank: d.finalRank, rank_index: rankCount(d.finalRank),
       best_billet: best?.name ?? null, best_prestige: best?.prestige ?? null, years: d.years, su_count: d.su,
       ribbons: d.ribbons.map((e) => ({ id: e.id, t: e.tierIndex })), title: d.title, quote: d.quote,
       rival_result: `${rival.name} ${rival.rank}${rival.active ? ' (현역)' : ''}`, seed: g.seed,
@@ -1655,6 +1660,11 @@ root.addEventListener('click', (e) => {
       }).catch((e) => toast(e instanceof Error ? e.message : '들어가지 못했어요'));
       break;
     }
+    case 'team-kick': {
+      if (!confirm('이 동기를 기수에서 내보낼까요? 이번 주 기록도 기수 점수에서 빠져요.')) break;
+      void kickMember(el.dataset.c ?? '', v).then(() => { invalidate('contest'); unstash(''); toast('내보냈어요'); render(); }).catch((e) => toast(e instanceof Error ? e.message : '내보내지 못했어요'));
+      break;
+    }
     case 'team-leave': {
       if (!confirm('이 기수에서 나갈까요? 이번 주 기록은 기수 점수에서 빠져요.')) break;
       void leaveTeam(v).then(async () => {
@@ -1730,6 +1740,7 @@ root.addEventListener('click', (e) => {
     case 'p-enter': if (p) { p.open = true; go('p-focus'); } break;
     case 'p-focus': if (p) { const f = v as SchoolFocus; p.focus = p.focus.includes(f) ? p.focus.filter((x) => x !== f) : [...p.focus, f].slice(-2); render(); } break;
     case 'p-branch': if (p) { p.branch = v as Branch; render(); } break;
+    case 'p-corps': if (p) { p.corps = v as Corps; p.branch = CORPS_BRANCH[p.corps]; render(); } break;
     case 'p-study': go('p-school'); break;
     case 'p-skip': clearInterval(schoolTimer); clearTimeout(schoolTimer); prologueGraduate(); go('p-grad'); break;
     case 'ad-eval': track('ad_click', { type: 'eval' }); openAd('eval'); break;

@@ -1,3 +1,4 @@
+import { CORPS, CORPS_BRANCH, DEFAULT_CORPS, type Corps } from '../data/billets';
 // 학교 프롤로그: 출신(무작위) → 생도 시절 집중 분야 2개 → 졸업 석차·병과 배정
 import { ORIGIN, SCHOOL_FOCUS } from '../data/config';
 import { createRng } from './rng';
@@ -15,6 +16,7 @@ const POT_BASE: Record<Potential, number> = { S: 70, A: 61, B: 52, C: 44 };
 const FOCUS_SCORE: Record<SchoolFocus, number> = { 학업: 6, 리더십: 4, 체력: 3, 동기: 2 };
 
 export interface Graduation {
+  corps: Corps;
   pct: number;
   label: string;
   bonus: Partial<Stats>;
@@ -23,7 +25,7 @@ export interface Graduation {
   title?: string;
 }
 
-export function graduate(o: { focus: [SchoolFocus, SchoolFocus]; branchWish: Branch; potential: Potential; seed: number }): Graduation {
+export function graduate(o: { focus: [SchoolFocus, SchoolFocus]; branchWish: Branch; corpsWish?: Corps; potential: Potential; seed: number }): Graduation {
   const rng = createRng(o.seed * 53 + 7);
   const score = POT_BASE[o.potential] + FOCUS_SCORE[o.focus[0]] + FOCUS_SCORE[o.focus[1]] + rng.int(-15, 15);
   const pct = Math.max(1, Math.min(99, Math.round(100 - (score - 25) * 1.5)));
@@ -34,9 +36,12 @@ export function graduate(o: { focus: [SchoolFocus, SchoolFocus]; branchWish: Bra
   const delta = pct <= 10 ? 3 : pct <= 50 ? 1 : pct >= 80 ? -2 : 0;
   if (delta) for (const k of primaries) add(k, delta);
   const granted = pct <= 60 || rng.next() < 0.5;
-  const others = (['전투', '기술', '행정'] as Branch[]).filter((b) => b !== o.branchWish);
+  // v3.4 병과: 희망이 안 되면 다른 8개 중 하나 (난수는 예전처럼 한 번만 씀)
+  const wish = o.corpsWish ?? DEFAULT_CORPS[o.branchWish];
+  const others = CORPS.filter((c) => c !== wish);
   const label = pct <= 1 ? '수석 졸업' : pct <= 10 ? '우등 졸업' : pct <= 50 ? '상위권 졸업' : pct >= 80 ? '하위권 졸업' : '무난한 졸업';
-  return { pct, label, bonus, branch: granted ? o.branchWish : rng.pick(others), branchGranted: granted, title: pct <= 1 ? '수석 졸업' : pct <= 10 ? '우등 졸업' : undefined };
+  const corps = granted ? wish : rng.pick(others);
+  return { pct, label, bonus, branch: CORPS_BRANCH[corps], corps, branchGranted: granted, title: pct <= 1 ? '수석 졸업' : pct <= 10 ? '우등 졸업' : undefined };
 }
 
 export const SCHOOL_MOMENTS: Record<Origin, string[]> = {

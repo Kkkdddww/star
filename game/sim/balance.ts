@@ -5,7 +5,7 @@ import { RANKS } from '../src/data/config';
 import { optionOdds, rewardTier } from '../src/engine/choice';
 import { advanceYear, decide, newGame, setPolicy, submitWishes } from '../src/engine/game';
 import { earnedRibbons } from '../src/engine/meta';
-import { assignmentsFor, isRequired, lacksRequired, wishScore } from '../src/engine/personnel';
+import { openFor, isRequired, lacksRequired, wishScore } from '../src/engine/personnel';
 import type { GameState, Potential, Style } from '../src/engine/types';
 
 declare const process: { argv: string[] };
@@ -31,7 +31,7 @@ function play(pot: Potential, bot: Bot, seed: number) {
       const pri = (a: { id: string; kind: string }) => bot === '한우물'
         ? (a.kind === '요직' ? 2 : a.kind === '참모' ? 1 : 0)
         : (lacksRequired(me) && isRequired(me, a.id) ? 3 : a.kind === '지휘' || a.kind === '요직' ? 1 : 0);
-      const opts = assignmentsFor(me.rank).sort((a, b) => pri(b) - pri(a) || wishScore(me, b) - wishScore(me, a));
+      const opts = openFor(me).sort((a, b) => pri(b) - pri(a) || wishScore(me, b) - wishScore(me, a));
       s = submitWishes(s, [opts[0].id, opts[1].id]);
       continue;
     }

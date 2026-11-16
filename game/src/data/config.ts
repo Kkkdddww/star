@@ -1,3 +1,4 @@
+import { BILLETS, FIXED_ONE, REQUIRED_IDS } from './billets';
 // 밸런스 숫자는 전부 여기에. 게임용 가상 값이며 실제 군 규정이 아니다.
 // 보직은 공개적으로 알려진 일반 직책명만 쓴다 (실제 부대명·번호·위치·편제 세부는 넣지 않음).
 import type { Assignment, BilletKind, Branch, Origin, Path, Personality, Policy, Potential, Rank, SchoolFocus, StatKey, Stats, Style } from '../engine/types';
@@ -22,9 +23,9 @@ export const PROMOTION: Partial<Record<Rank, { cumulative: number; tries: number
 
 /** 필수 보직: 이 계급에서 다음 계급 심사를 받으려면 반드시 거쳐야 하는 보직 (하나라도) */
 export const REQUIRED_BILLET: Partial<Record<Rank, { ids: string[]; label: string; forceAt: number | null }>> = {
-  대위: { ids: ['company'], label: '중대장', forceAt: 4 },
-  중령: { ids: ['battalion'], label: '대대장', forceAt: null },
-  대령: { ids: ['regiment', 'hq_chief'], label: '연대장 또는 본부 과장', forceAt: null },
+  대위: { ids: REQUIRED_IDS.대위!, label: '중대장급', forceAt: 4 },
+  중령: { ids: REQUIRED_IDS.중령!, label: '대대장급', forceAt: null },
+  대령: { ids: REQUIRED_IDS.대령!, label: '연대·여단장급 또는 정책부서 과장', forceAt: null },
 };
 /** 인사에서 필수 보직을 아직 안 한 사람이 그 보직을 지원하면 받는 가점 */
 export const REQUIRED_WISH_BONUS = 10;
@@ -120,47 +121,13 @@ export const SCHOOL_FOCUS: Record<SchoolFocus, { stats: Partial<Stats>; desc: st
 };
 
 // ── 보직표 ──
-const T = { cmd: ['부대관리', '위기대응'], key: ['기획', '조정'], staff: ['기획', '조정'], edu: ['교육', '소통'] };
-const B = (id: string, name: string, ranks: Rank[], kind: BilletKind, grows: [StatKey, StatKey], prestige: number): Assignment =>
-  ({ id, name, ranks, kind, grows, prestige, wantTags: kind === '지휘' ? T.cmd : kind === '요직' ? T.key : kind === '교육' ? T.edu : T.staff });
 
-export const ASSIGNMENTS: Assignment[] = [
-  B('platoon', '소대장', ['소위', '중위'], '지휘', ['command', 'tactics'], 60),
-  B('company', '중대장', ['대위'], '지휘', ['command', 'tactics'], 75),
-  B('bn_staff', '대대 참모', ['대위'], '참모', ['admin', 'expertise'], 60),
-  B('branch_inst', '병과학교 교관', ['대위'], '교육', ['expertise', 'social'], 60),
-  B('ind_company', '독립중대장', ['소령'], '지휘', ['command', 'tactics'], 75),
-  B('div_staff_m', '사단 참모', ['소령'], '요직', ['admin', 'expertise'], 75),
-  B('bn_ops', '대대 작전과장', ['소령'], '참모', ['tactics', 'admin'], 65),
-  B('deputy_bn', '부대대장', ['소령'], '참모', ['command', 'admin'], 65),
-  B('inst_m', '교육기관 교관', ['소령'], '교육', ['expertise', 'social'], 65),
-  B('battalion', '대대장', ['중령'], '지휘', ['command', 'tactics'], 80),
-  B('corps_staff', '군단 참모', ['중령'], '요직', ['admin', 'social'], 80),
-  B('div_staff_l', '사단 참모', ['중령'], '참모', ['admin', 'expertise'], 70),
-  B('inst_l', '교육기관 교관', ['중령'], '교육', ['expertise', 'social'], 70),
-  B('regiment', '연대장', ['대령'], '지휘', ['command', 'admin'], 85),
-  B('hq_chief', '본부 과장', ['대령'], '요직', ['admin', 'expertise'], 85),
-  B('div_cos', '사단 참모장', ['대령'], '참모', ['admin', 'social'], 80),
-  B('inst_head', '교육기관 처장', ['대령'], '교육', ['expertise', 'admin'], 75),
-  B('deputy_div', '부사단장', ['준장'], '지휘', ['command', 'admin'], 85),
-  B('brigade', '여단장', ['준장'], '지휘', ['command', 'tactics'], 85),
-  B('hq_director', '본부 처장', ['준장'], '요직', ['admin', 'social'], 85),
-  B('inst_vice', '교육기관 부장', ['준장'], '교육', ['expertise', 'social'], 80),
-  B('division', '사단장', ['소장'], '지휘', ['command', 'tactics'], 90),
-  B('hq_dcs', '본부 참모부장', ['소장'], '요직', ['admin', 'social'], 90),
-  B('corps_cos', '군단 참모장', ['소장'], '참모', ['admin', 'tactics'], 85),
-  B('inst_chief', '교육기관장', ['소장'], '교육', ['expertise', 'command'], 85),
-  B('corps', '군단장', ['중장'], '지휘', ['command', 'social'], 92),
-  B('hq_vcs', '본부 참모차장', ['중장'], '요직', ['admin', 'social'], 92),
-  B('cmd_deputy', '사령부 부사령관', ['중장'], '참모', ['command', 'admin'], 88),
-  B('academy', '교육기관 총장', ['중장'], '교육', ['expertise', 'social'], 88),
-  B('commander', '사령관', ['대장'], '지휘', ['command', 'social'], 95),
-  B('chief', '참모총장', ['대장'], '요직', ['social', 'admin'], 98),
-];
+// v3.4: 보직은 src/data/billets.ts (병과 9개 · 약 80개 보직 · 부대 종류)
+export const ASSIGNMENTS: Assignment[] = BILLETS;
 
 /** 인사 정원: 지원자 수 대비 비율. null = 정원 제한 없음 */
 export const QUOTA: Record<BilletKind, number | null> = { 지휘: 0.35, 요직: 0.25, 참모: null, 교육: null };
-export const FIXED_QUOTA: Record<string, number | null> = { chief: 1, commander: null, platoon: null };
+export const FIXED_QUOTA: Record<string, number | null> = { ...Object.fromEntries(FIXED_ONE.map((id) => [id, 1])), commander: null };
 /** 장성 인사에 함께 경쟁하는 가상의 선후배 기수 인원 */
 export const VIRTUAL_SENIORS = 6;
 export const WISH_WEIGHTS = { eval: 0.6, stat: 0.3, social: 0.1, tag: 5, tagMax: 2, risk: 3 };

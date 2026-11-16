@@ -1,3 +1,4 @@
+import { CORPS, CORPS_BRANCH, CORPS_DESC, UNIT_TYPES } from '../src/data/billets';
 // 검색·애드센스용 정적 페이지 생성기: npx tsx web/pages.ts → dist/site/*.html
 import { BOSSES, UNITS } from '../src/engine/term';
 import { writeFileSync, mkdirSync } from 'fs';
@@ -157,7 +158,7 @@ urls.push(page('guide-promotion', '계급별 진급 조건 총정리', '소위�
     <h3>공적</h3><p>최근 4년 동안 쌓은 공적이에요. 기본 40점에 표창 1개당 5점, 큰 표창 10점, 지휘 보직 무사고 1년당 3점, 임기 목표 달성 6점이 더해져요(최대 100점). 평정처럼 최근 4년만 봐요.</p>
     <h3>교육</h3><p>군사교육 석차예요. 전문성이 높을수록 석차가 좋아요.</p>
     <h3>역량 균형</h3><p>가장 낮은 능력치 두 개의 평균이 계급 기준보다 얼마나 높은지로 매겨요. 모든 심사에서 15%를 차지해요.</p>`) +
-  sec('별을 다는 확률', `<p>실제 플레이 기록을 바탕으로 맞춘 목표 비율은 준장 이상 약 8%, 중장(쓰리스타) 이상 약 1%, 대장(포스타) 약 0.5%예요. 처음 해보는 판에서는 이보다 낮고, 규칙을 익힐수록 올라가요. 중령 이상 심사는 동기만으로는 인원이 적어서 다른 기수 대상자와 함께 10명 규모로 심사해요.</p>
+  sec('별을 다는 확률', `<p>실제 플레이 기록을 바탕으로 맞춘 목표 비율은 준장 이상 약 15%, 중장(쓰리스타) 이상 약 1%, 대장(포스타) 약 0.5%예요. 처음 해보는 판에서는 이보다 낮고, 규칙을 익힐수록 올라가요. 중령 이상 심사는 동기만으로는 인원이 적어서 다른 기수 대상자와 함께 10명 규모로 심사해요.</p>
     <div class="tip">대령에서 별을 다는 건 4명 중 1명 정도예요. 필수 보직과 역량 균형을 모두 챙겨야 이 안에 들 수 있어요.</div>`)));
 
 // ── 보직 ──
@@ -165,10 +166,14 @@ const KINDS = ['지휘', '요직', '참모', '교육'] as const;
 const billetRows = (RANKS as Rank[]).map((r) => {
   const list = ASSIGNMENTS.filter((a) => a.ranks.includes(r) && (r !== '중위' || a.id !== 'platoon' || true));
   if (!list.length || r === '중위') return '';
-  return `<tr><td><b>${r}${r === '소위' ? '·중위' : ''}</b></td><td>${list.map((a) => `${a.name} <span style="color:var(--faint);font-size:12px">${a.kind}</span>`).join('<br>')}</td><td>${list.map((a) => a.grows.map((g) => STAT_LABEL[g]).join('·')).join('<br>')}</td></tr>`;
+  return `<tr><td><b>${r}${r === '소위' ? '·중위' : ''}</b></td><td>${list.map((a) => `${a.name} <span style="color:var(--faint);font-size:12px">${a.kind}${a.corps ? ` · ${a.corps.join('·')}` : ''}</span>`).join('<br>')}</td><td>${list.map((a) => a.grows.map((g) => STAT_LABEL[g]).join('·')).join('<br>')}</td></tr>`;
 }).join('');
-urls.push(page('guide-billets', '보직 전체 목록과 필수 보직', '말뚝에 나오는 31개 보직을 계급별로 정리하고, 지휘·요직·참모·교육 보직의 차이와 필수 보직 규칙을 설명해요.', [['/guide.html', '게임 가이드'], ['', '보직']],
-  hero('게임 가이드 · 보직', '보직 전체 목록과 필수 보직', '어떤 자리를 거쳤는지가 다음 진급을 좌우해요. 계급별로 갈 수 있는 보직과 각 보직에서 크는 능력치를 정리했어요.') +
+urls.push(page('guide-billets', '병과 · 보직 전체 목록과 필수 보직', `말뚝에 나오는 병과 9개와 ${ASSIGNMENTS.length}개 보직을 계급별로 정리하고, 지휘·요직·참모·교육 보직의 차이와 필수 보직 규칙을 설명해요.`, [['/guide.html', '게임 가이드'], ['', '보직']],
+  hero('게임 가이드 · 보직', '병과 · 보직 전체 목록과 필수 보직', '어떤 자리를 거쳤는지가 다음 진급을 좌우해요. 계급별로 갈 수 있는 보직과 각 보직에서 크는 능력치를 정리했어요.') +
+  sec('병과 9개', `<p>생도 때 희망 병과를 고르고, 졸업 석차에 따라 배정돼요. 병과마다 갈 수 있는 지휘 보직이 다르고, 병과와 맞는 보직에서는 성장이 20% 빨라요. 모든 직책명은 공개된 일반 명칭이고 실제 부대와 관계없어요.</p>
+    <table><tr><th>계열</th><th>병과</th><th>특징</th></tr>${CORPS.map((c) => `<tr><td>${CORPS_BRANCH[c]}</td><td><b>${c}</b></td><td>${CORPS_DESC[c]}</td></tr>`).join('')}</table>`) +
+  sec('부대 종류', `<p>보직마다 근무하는 부대 종류가 정해지거나 해마다 달라요. 희망 조사서에서 미리 볼 수 있어요.</p>
+    <table><tr><th>부대 종류</th><th>효과</th></tr>${Object.values(UNIT_TYPES).map((u) => `<tr><td><b>${u.name}</b></td><td>${u.desc}</td></tr>`).join('')}</table>`) +
   sec('보직의 네 가지 종류', `<ul><li><b>지휘</b> · 소대장, 중대장, 대대장처럼 부대를 맡는 자리예요. 진급 경력 점수에서 가장 크게 인정받고, 필수 보직도 대부분 지휘 보직이에요. 정원이 좁아서 경쟁이 세요.</li>
     <li><b>요직</b> · 사단·군단 참모처럼 상급 부대의 핵심 자리예요. 지휘 보직과 같은 핵심 경력으로 인정받아요.</li>
     <li><b>참모</b> · 정원 제한이 없어서 원하면 대부분 갈 수 있어요. 보조 경력으로 인정받아요.</li>

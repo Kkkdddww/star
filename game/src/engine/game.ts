@@ -1,10 +1,11 @@
+import type { Corps } from '../data/billets';
 // 게임 진행: 새 게임 → (결재 2건 → 1년 보내기 → 진급 → 인사 → 지휘 방침) 반복. 화면 코드는 여기에 없다.
 import { CHOICE_BY_ID } from '../data/choices';
 import { ASSIGNMENTS, AUTO_PROMOTE, GENERAL_TERM, MIN_YEARS, PROMOTION, RANKS, REQUIRED_BILLET } from '../data/config';
 import { buildDesk, npcPick, resolveChoice } from './choice';
 import { overall } from './growth';
 import { createCohort, createOfficer, npcFocus, stepOfficer } from './officer';
-import { asg, assignmentsFor, isGeneral, needsReassign, runPersonnel } from './personnel';
+import { asg, assignmentsFor, isGeneral, needsReassign, openFor, runPersonnel, utypeOf } from './personnel';
 import { rollBoss, startTerm, UNIT_KEYS, unitCard } from './term';
 import { runReview, weakest } from './promotion';
 import { createRng, type Rng } from './rng';
@@ -13,7 +14,7 @@ import { bossComment, gradeOf } from './yearEvents';
 import type { Branch, DeskResult, GameState, Officer, Origin, Path, Policy, Potential, PromotionResult, Rank, StatKey, Stats, YearEvent, YearReport } from './types';
 
 export interface NewGameOpts {
-  name: string; origin: Origin; branch: Branch; path: Path; potential: Potential; seed: number;
+  name: string; origin: Origin; branch: Branch; corps?: Corps; path: Path; potential: Potential; seed: number;
   schoolPct: number; bonus: Partial<Stats>; year?: number;
   creation?: { rerolls: number; viewed: boolean };
   /** 오늘의 기수·우리 기수: 세상 시드(seed)는 모두 같고, 판정 주사위만 rollSeed로 */
@@ -23,7 +24,7 @@ const rollOf = (s: GameState) => s.rollSeed ?? s.seed;
 
 export function newGame(opts: NewGameOpts): GameState {
   const rng = createRng(opts.seed * 31 + 17);
-  const me = createOfficer({ id: 'me', name: opts.name, origin: opts.origin, branch: opts.branch, path: opts.path, potential: opts.potential, schoolPct: opts.schoolPct, bonus: opts.bonus });
+  const me = createOfficer({ id: 'me', name: opts.name, origin: opts.origin, branch: opts.branch, corps: opts.corps, path: opts.path, potential: opts.potential, schoolPct: opts.schoolPct, bonus: opts.bonus });
   const cohort = createCohort(rng, opts.name);
   // 라이벌: 졸업 석차가 가장 가까운 동기
   const rival = [...cohort].sort((a, b) => Math.abs(a.schoolPct - opts.schoolPct) - Math.abs(b.schoolPct - opts.schoolPct))[0];
@@ -36,6 +37,7 @@ export function newGame(opts: NewGameOpts): GameState {
   const u = unitCard(opts.seed, year, 'platoon');
   startTerm(me, u, rollBoss(u, roll), year);
   for (const o of cohort) { const k = roll.pick(UNIT_KEYS); startTerm(o, k, rollBoss(k, roll), year); }
+  for (const o of [me, ...cohort]) o.utype = utypeOf(opts.seed, year, asg(o.assignmentId), o.id);
   const state: GameState = {
     year, seed: opts.seed, me, cohort, rivalId: rival.id, history: [],
     desk: null, personnelDue: false, policyDue: false, personnel: [], majorYears: [...years].sort((a, b) => a - b),
@@ -195,7 +197,7 @@ export function advanceYear(state: GameState, focus: [StatKey, StatKey]): { next
   if (ended) return { next, report };
 
   // 인사: 내가 대상이고 고를 보직이 2개 이상이면 희망 조사부터. 아니면 바로 정기 인사
-  if (needsReassign(me) && assignmentsFor(me.rank).length > 1) {
+  if (needsReassign(me) && openFor(me).length > 1) {
     next.personnelDue = true;
     return { next, report };
   }
@@ -243,9 +245,8 @@ export function upcoming(s: GameState): { promotion?: { to: Rank; attempt: numbe
   if (p && me.yearsInRank + 1 >= MIN_YEARS[me.rank]!) out.promotion = { to: RANKS[RANKS.indexOf(me.rank) + 1], attempt: me.reviewFails + 1, tries: p.tries };
   if (me.longService === 'pending' && me.rank === '중위' && me.yearsInRank === 1) out.longService = 1;
   if (me.longService === 'retry') out.longService = 2;
-  if (me.rank === '대위' && me.yearsInRank === 0) out.education = '대위 보수교육';
-  if (me.rank === '소령' && me.yearsInRank === 0) out.education = '상급 지휘참모과정';
-  if (me.yearsInAssignment + 1 >= 2 && assignmentsFor(me.rank).length > 1) out.reassign = true;
+  if (me.yearsInRank === 0) out.education = me.rank === '대위' ? '고등군사반' : me.rank === '소령' ? '합동군사대학' : me.rank === '대령' ? '안보과정' : undefined;
+  if (me.yearsInAssignment + 1 >= 2 && openFor(me).length > 1) out.reassign = true;
   return out;
 }
 
