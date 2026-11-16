@@ -37,8 +37,12 @@ function eligible(def: ChoiceDef, o: Officer): boolean {
   if (def.when.groups && !def.when.groups.includes(rankGroup(o.rank))) return false;
   if (def.when.kinds && !def.when.kinds.includes(billetKindOf(o.assignmentId))) return false;
   if (def.when.corps && !def.when.corps.includes(corpsOfO(o))) return false;
+  if (def.when.billets && !def.when.billets.includes(o.assignmentId)) return false;
   return true;
 }
+
+/** v3.4.2 결재 사건의 구체성: 2 = 보직 · 병과 전용, 1 = 지휘/참모 같은 보직 종류, 0 = 계급만 */
+export const specificity = (d: ChoiceDef) => (d.when.billets || d.when.corps ? 2 : d.when.kinds ? 1 : 0);
 
 function majorFits(def: ChoiceDef, o: Officer): boolean {
   if (!def.major) return false;
@@ -64,13 +68,29 @@ export function buildDesk(o: Officer, year: number, isMajorYear: boolean, rng: R
   const all = pool.length >= need ? pool : CHOICES.filter((d) => eligible(d, o) && !picked.includes(d.id));
   for (let i = 0; i < need && all.length; i++) {
     const types = picked.map((id) => CHOICE_BY_ID[id].type);
-    const diff = all.filter((d) => !types.includes(d.type));
-    const cands = (diff.length ? diff : all).sort((a, b) => last(a) - last(b) || rng.next() - 0.5);
+    // v3.4.2 보직 · 병과 사건을 먼저. 그런 사건이 없을 때만 넓은 사건, 넓은 사건은 한 해 1건까지
+    const broadUsed = picked.some((id) => specificity(CHOICE_BY_ID[id]) < 2);
+    // 안 본 보직 사건 → 안 본 넓은 사건(한 해 1건) → 오래전에 본 보직 사건 → 그 밖
+    const elig = CHOICES.filter((d) => eligible(d, o) && !picked.includes(d.id));
+    const isSpec = (d: ChoiceDef) => specificity(d) === 2;
+    const unseen = (d: ChoiceDef) => o.eventLog[d.id] === undefined;
+    const tiers = [
+      elig.filter((d) => isSpec(d) && unseen(d)),
+      broadUsed ? [] : elig.filter((d) => !isSpec(d) && unseen(d)),
+      elig.filter((d) => isSpec(d) && year - last(d) >= 5),
+      elig.filter((d) => isSpec(d) && year - last(d) > 2),
+      broadUsed ? [] : all.filter((d) => !isSpec(d)),
+      all,
+    ];
+    const tier = tiers.find((t) => t.length);
+    if (!tier) break;
+    const diff = tier.filter((d) => !types.includes(d.type));
+    const cands = (diff.length ? diff : tier).sort((a, b) => last(a) - last(b) || rng.next() - 0.5);
     const oldest = last(cands[0]);
     const top = cands.filter((d) => last(d) === oldest || last(d) < -900);
     const d = rng.pick(top.length >= 2 ? top : cands.slice(0, 3));
     picked.push(d.id);
-    all.splice(all.indexOf(d), 1);
+    if (all.includes(d)) all.splice(all.indexOf(d), 1);
   }
   if (major) picked.push(major);
   return picked.slice(0, 2).map((defId, i) => {

@@ -166,7 +166,7 @@ export interface ChoiceDef {
   type: EventType;
   title: string;
   body: string;
-  when: { groups?: RankGroup[]; kinds?: BilletKind[]; ranks?: Rank[]; /** v3.4 이 병과만 */ corps?: string[] };
+  when: { groups?: RankGroup[]; kinds?: BilletKind[]; ranks?: Rank[]; /** v3.4 이 병과만 */ corps?: string[]; /** v3.4.2 이 보직만 */ billets?: string[] };
   options: ChoiceOption[];
   /** 같은 이벤트가 다시 나올 때 쓰는 다른 상황 문구 */
   variants?: { title: string; body: string }[];

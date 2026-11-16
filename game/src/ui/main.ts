@@ -604,6 +604,15 @@ function raceSheet(g: GameState): string {
     <button class="btn" data-act="close-sheet">닫기</button>`;
 }
 
+/** v3.4.2 결재 본문의 {자리} · {부대} · {상관}을 지금 상황으로 채운다 */
+function fillDesk(text: string, g: GameState): string {
+  const me = g.me;
+  const post = asg(me.assignmentId).name;
+  return text.replaceAll('{자리}로', ro(post)).replaceAll('{자리}', post)
+    .replaceAll('{부대}', me.utype ? UNIT_TYPES[me.utype].name.replace(/ \(.*\)$/, '') : '우리 부대')
+    .replaceAll('{상관}', me.term ? BOSSES[me.term.boss].name : '상관');
+}
+
 function viewHome(g: GameState): string {
   const me = g.me;
   if (me.capped === 'ask') return `${serviceCard(g)}${viewCap(g)}`;
@@ -826,10 +835,10 @@ function viewDesk(g: GameState): string {
   if (res) return viewDeskResult(g, res, header);
   return `
   <div class="page"><div class="pad tight">
-    <p class="kicker">${slot === 0 ? '상반기 결재' : '7월 결재'} · ${def.type}${def.major ? ' · 중대 사건' : ''}</p>
+    <p class="kicker">${slot === 0 ? '상반기 결재' : '7월 결재'} · ${def.when.billets ? `보직 사건 · ${asg(g.me.assignmentId).name}` : def.when.corps ? `${corpsOfO(g.me)} 병과 사건` : def.type}${def.major ? ' · 중대 사건' : ''}</p>
     ${header}
     <h1 class="h1" style="margin-top:0">${deskText(item.defId, item.v).title}</h1>
-    <p class="body">${deskText(item.defId, item.v).body}</p>
+    <p class="body">${fillDesk(deskText(item.defId, item.v).body, g)}</p>
     ${def.major ? '<p class="faint" style="margin-top:8px">· 커리어에 오래 남는 사건이에요</p>' : ''}
     ${pityBonus(g.me) ? `<p class="pity">연속 실패 보정 · 이번 결재는 성공 판정에 +${pityBonus(g.me)}%p가 몰래 더해져요</p>` : ''}
     <div style="margin-top:14px">

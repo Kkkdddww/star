@@ -6,6 +6,7 @@
 // 결과는 행정적인 것까지만: 표창·경고·견책·조사. 인명 피해는 다루지 않는다.
 // 성향: 원칙(안전, 작은 보상) · 소통(처세) · 도전(큰 보상, 실패 손해) · 편법(당장은 쉽지만 숨은 리스크 +)
 import type { ChoiceDef } from '../engine/types';
+import { BILLET_EVENTS } from './billetEvents';
 
 export const CHOICES: ChoiceDef[] = [
 
@@ -1240,5 +1241,7 @@ export const CHOICES: ChoiceDef[] = [
     ],
   },
 ];
+
+CHOICES.push(...BILLET_EVENTS);
 
 export const CHOICE_BY_ID: Record<string, ChoiceDef> = Object.fromEntries(CHOICES.map((c) => [c.id, c]));
